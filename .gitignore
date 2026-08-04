@@ -1,0 +1,28 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+**/.DS_Store
+/build
+/app/build
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.ap_
+*.aab
+*.dex
+bin/
+gen/
+out/
+.kotlin/
+
+# Signing / secrets
+keystore.properties
+*.jks
+*.keystore
+
+# Local scratch
+.tmp-chug/
+*.log
