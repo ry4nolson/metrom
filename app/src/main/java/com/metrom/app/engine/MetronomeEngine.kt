@@ -223,6 +223,8 @@ class MetronomeEngine(
             ensureStoppedLocked()
             if (!playing.compareAndSet(false, true)) return
             clicksEnabled.set(true)
+            // Use Android audio priority inside runLoop — not Thread.MAX_PRIORITY,
+            // which can starve system_server on emulators left playing overnight.
             val thread = Thread({
                 try {
                     runLoop()
@@ -230,9 +232,7 @@ class MetronomeEngine(
                     // Write errors / natural exit — clear flag so a later start can arm.
                     playing.set(false)
                 }
-            }, "metrom-audio").apply {
-                priority = Thread.MAX_PRIORITY
-            }
+            }, "metrom-audio")
             audioThread = thread
             thread.start()
         }
@@ -545,10 +545,14 @@ class MetronomeEngine(
                 isAccent = beat.isAccent,
                 timestampMs = hearAt
             )
-            mainHandler.postAtTime(
-                { if (playing.get()) onBeat(event) },
-                hearAt
-            )
+            // Skip flash if the main looper is already behind — avoids unbounded
+            // Handler backlog when the UI/emulator stalls overnight.
+            mainHandler.postAtTime({
+                if (!playing.get()) return@postAtTime
+                val late = SystemClock.uptimeMillis() - hearAt
+                if (late > maxDelayMs) return@postAtTime
+                onBeat(event)
+            }, hearAt)
         }
     }
 

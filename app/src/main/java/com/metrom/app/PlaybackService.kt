@@ -45,7 +45,9 @@ class PlaybackService : Service() {
 
         ensureChannel()
         promoteForeground(buildNotification())
-        return START_STICKY
+        // NOT_STICKY: don't resurrect a zombie FGS after process death overnight
+        // without a live ViewModel/engine (START_STICKY was keeping the service warm).
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -136,14 +138,22 @@ class PlaybackService : Service() {
         /**
          * Start / refresh the FGS while playing; stop the service when idle.
          * Avoids startService() while backgrounded (restricted on modern Android).
+         *
+         * Failures are swallowed: if POST_NOTIFICATIONS is denied (or the OS
+         * blocks FGS start), the in-process engine in [MetronomeViewModel] still
+         * keeps clicking — the user just won't see a shade tile.
          */
         fun sync(context: Context) {
             val app = context.applicationContext
-            if (PlaybackBridge.playing) {
-                val intent = Intent(app, PlaybackService::class.java).setAction(ACTION_SYNC)
-                app.startForegroundService(intent)
-            } else {
-                app.stopService(Intent(app, PlaybackService::class.java))
+            try {
+                if (PlaybackBridge.playing) {
+                    val intent = Intent(app, PlaybackService::class.java).setAction(ACTION_SYNC)
+                    app.startForegroundService(intent)
+                } else {
+                    app.stopService(Intent(app, PlaybackService::class.java))
+                }
+            } catch (_: Exception) {
+                // Notification / background-start restriction — audio continues.
             }
         }
     }
