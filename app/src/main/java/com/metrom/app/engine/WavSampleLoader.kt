@@ -8,10 +8,28 @@ import java.nio.ByteOrder
 import kotlin.math.roundToInt
 
 /**
- * Loads 16-bit PCM WAV into mono ShortArrays at [ClickSynthesizer.SAMPLE_RATE].
- * Supports mono/stereo PCM WAVs (common guitar sample exports).
+ * Loads 16-bit PCM WAV into ShortArrays.
+ *
+ * Sample tones use [loadToneWav] — strict mono / 16-bit / [ClickSynthesizer.SAMPLE_RATE],
+ * no resample. Legacy [loadChug] may still mixdown/resample for the old CHUG path.
  */
 object WavSampleLoader {
+
+    /**
+     * Strict asset load for sample tones. Requires mono, 16-bit PCM at
+     * [ClickSynthesizer.SAMPLE_RATE]. Failure (missing / mismatch) is a Result — no resample.
+     */
+    fun loadToneWav(context: Context, assetPath: String): Result<ShortArray> =
+        runCatching {
+            context.assets.open(assetPath).use { input ->
+                decodeWavStrict(input.readBytes(), assetPath)
+            }
+        }
+
+    fun toneAssetExists(context: Context, assetPath: String): Boolean =
+        runCatching {
+            context.assets.open(assetPath).use { true }
+        }.getOrDefault(false)
 
     fun loadChug(context: Context, accent: Boolean): ShortArray? {
         val primary = if (accent) "chug_accent.wav" else "chug.wav"
@@ -47,10 +65,62 @@ object WavSampleLoader {
 
     fun loadStream(input: InputStream): ShortArray {
         val bytes = input.readBytes()
-        return decodeWav(bytes)
+        return decodeWavLegacy(bytes)
     }
 
-    private fun decodeWav(bytes: ByteArray): ShortArray {
+    /**
+     * Mono 16-bit PCM at [ClickSynthesizer.SAMPLE_RATE] only — no resample, no mixdown.
+     */
+    private fun decodeWavStrict(bytes: ByteArray, label: String): ShortArray {
+        val parsed = parseWav(bytes)
+        require(parsed.channels == 1) {
+            "$label: expected mono, got ${parsed.channels} channel(s)"
+        }
+        require(parsed.bitsPerSample == 16) {
+            "$label: expected 16-bit PCM, got ${parsed.bitsPerSample}-bit"
+        }
+        require(parsed.sampleRate == ClickSynthesizer.SAMPLE_RATE) {
+            "$label: expected ${ClickSynthesizer.SAMPLE_RATE} Hz, got ${parsed.sampleRate} Hz (no resample)"
+        }
+        val pcm = ShortArray(parsed.frameCount)
+        val buf = ByteBuffer.wrap(bytes, parsed.dataOffset, parsed.dataSize)
+            .order(ByteOrder.LITTLE_ENDIAN)
+        for (i in 0 until parsed.frameCount) {
+            pcm[i] = buf.short
+        }
+        require(pcm.isNotEmpty()) { "$label: empty PCM" }
+        return pcm
+    }
+
+    /** Legacy path: stereo→mono mixdown + resample (CHUG drop-in only). */
+    private fun decodeWavLegacy(bytes: ByteArray): ShortArray {
+        val parsed = parseWav(bytes)
+        require(parsed.bitsPerSample == 16) { "Only 16-bit PCM supported" }
+        val mono = ShortArray(parsed.frameCount)
+        val buf = ByteBuffer.wrap(bytes, parsed.dataOffset, parsed.dataSize)
+            .order(ByteOrder.LITTLE_ENDIAN)
+        for (i in 0 until parsed.frameCount) {
+            var sum = 0
+            repeat(parsed.channels) { sum += buf.short.toInt() }
+            mono[i] = (sum / parsed.channels).toShort()
+        }
+        return if (parsed.sampleRate == ClickSynthesizer.SAMPLE_RATE) {
+            mono
+        } else {
+            resample(mono, parsed.sampleRate, ClickSynthesizer.SAMPLE_RATE)
+        }
+    }
+
+    private data class WavParsed(
+        val channels: Int,
+        val sampleRate: Int,
+        val bitsPerSample: Int,
+        val dataOffset: Int,
+        val dataSize: Int,
+        val frameCount: Int,
+    )
+
+    private fun parseWav(bytes: ByteArray): WavParsed {
         require(bytes.size >= 44) { "WAV too small" }
         require(bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte()) { "Not RIFF" }
 
@@ -72,7 +142,6 @@ object WavSampleLoader {
                     channels = leShort(bytes, chunkStart + 2).toInt() and 0xffff
                     sampleRate = leInt(bytes, chunkStart + 4)
                     bitsPerSample = leShort(bytes, chunkStart + 14).toInt() and 0xffff
-                    require(bitsPerSample == 16) { "Only 16-bit PCM supported" }
                 }
                 "data" -> {
                     dataOffset = chunkStart
@@ -83,20 +152,15 @@ object WavSampleLoader {
             offset = chunkStart + size + (size and 1) // word align
         }
         require(dataOffset >= 0) { "No data chunk" }
-
         val frameCount = dataSize / (channels * 2)
-        val mono = ShortArray(frameCount)
-        val buf = ByteBuffer.wrap(bytes, dataOffset, dataSize).order(ByteOrder.LITTLE_ENDIAN)
-        for (i in 0 until frameCount) {
-            var sum = 0
-            repeat(channels) { sum += buf.short.toInt() }
-            mono[i] = (sum / channels).toShort()
-        }
-        return if (sampleRate == ClickSynthesizer.SAMPLE_RATE) {
-            mono
-        } else {
-            resample(mono, sampleRate, ClickSynthesizer.SAMPLE_RATE)
-        }
+        return WavParsed(
+            channels = channels,
+            sampleRate = sampleRate,
+            bitsPerSample = bitsPerSample,
+            dataOffset = dataOffset,
+            dataSize = dataSize,
+            frameCount = frameCount,
+        )
     }
 
     private fun resample(input: ShortArray, fromRate: Int, toRate: Int): ShortArray {
