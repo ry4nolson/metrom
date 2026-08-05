@@ -21,8 +21,9 @@ import com.metrom.app.data.SongStore
 import com.metrom.app.engine.AccentNote
 import com.metrom.app.engine.BeatAccent
 import com.metrom.app.engine.BeatEvent
-import com.metrom.app.engine.ClickTone
 import com.metrom.app.engine.MetronomeEngine
+import com.metrom.app.engine.MetronomeTone
+import com.metrom.app.engine.SampleToneCache
 import com.metrom.app.engine.Subdivision
 import com.metrom.app.engine.SwingFeel
 import com.metrom.app.engine.TimeSignature
@@ -64,7 +65,9 @@ data class MetronomeUiState(
     val swing: SwingFeel = SwingFeel.OFF,
     /** Compound meters: BPM counts the dotted feel (3 rail pulses). */
     val groupTempo: Boolean = false,
-    val tone: ClickTone = ClickTone.WOOD,
+    val tone: MetronomeTone = MetronomeTone.DEFAULT,
+    /** Synth + loadable sample tones for the SOUND selector. */
+    val toneOptions: List<MetronomeTone> = emptyList(),
     val accentNote: AccentNote = AccentNote.DEFAULT,
     val beatAccents: List<BeatAccent> = BeatAccent.defaultPattern(4, 4),
     val volume: Float = 1f,
@@ -144,12 +147,18 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         run {
             val beats = prefs.getInt("beats", 4)
             val noteValue = prefs.getInt("noteValue", 4)
+            val app = application.applicationContext
+            val toneOptions = availableTones(app)
+            val storedTone = MetronomeTone.fromId(prefs.getString(PREF_TONE_ID, null).orEmpty())
+                ?.takeIf { it in toneOptions }
+                ?: MetronomeTone.DEFAULT
             MetronomeUiState(
                 bpm = prefs.getInt("bpm", 120),
                 volume = prefs.getFloat("volume", 0.9f).coerceIn(0f, 1f),
                 muted = prefs.getBoolean("muted", false),
                 haptics = prefs.getBoolean("haptics", true),
-                tone = ClickTone.entries.getOrElse(prefs.getInt("tone", 0)) { ClickTone.WOOD },
+                tone = storedTone,
+                toneOptions = toneOptions,
                 accentNote = AccentNote.entries.getOrElse(prefs.getInt("accentNote", AccentNote.DEFAULT.ordinal)) {
                     AccentNote.DEFAULT
                 },
@@ -190,6 +199,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val engine = MetronomeEngine(
         audioManager = audioManager,
+        appContext = application.applicationContext,
         onBeat = { event -> onBeat(event) }
     ).also { eng ->
         // Persist cleaned song list if duplicates were collapsed on load
@@ -431,10 +441,13 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         prefs.edit().putInt("subdivision", subdivision.ordinal).apply()
     }
 
-    fun setTone(tone: ClickTone, preview: Boolean = true) {
-        engine.setTone(tone)
-        _state.update { it.copy(tone = tone) }
-        prefs.edit().putInt("tone", tone.ordinal).apply()
+    fun setTone(tone: MetronomeTone, preview: Boolean = true) {
+        val applied = engine.setTone(tone)
+        _state.update { it.copy(tone = applied) }
+        prefs.edit()
+            .putString(PREF_TONE_ID, applied.id)
+            .remove("tone") // drop legacy ordinal key
+            .apply()
         if (preview && !_state.value.isPlaying) engine.previewClick(accent = true)
     }
 
@@ -934,7 +947,7 @@ private fun List<SongPreset>.dedupeSongs(): List<SongPreset> {
             song.timeSignature.beats,
             song.timeSignature.noteValue,
             song.subdivision.ordinal,
-            song.tone.ordinal,
+            song.tone.id,
             song.accentNote.ordinal,
             BeatAccent.encode(song.beatAccents),
             song.swing.ordinal,
@@ -946,3 +959,14 @@ private fun List<SongPreset>.dedupeSongs(): List<SongPreset> {
         seen.add(key)
     }
 }
+
+/** Synth tones always; sample tones only when strong+normal WAVs load cleanly. */
+private fun availableTones(context: Context): List<MetronomeTone> =
+    MetronomeTone.all.filter { tone ->
+        when (tone) {
+            is MetronomeTone.Synth -> true
+            is MetronomeTone.Sample -> SampleToneCache.get(context, tone.tone) != null
+        }
+    }
+
+private const val PREF_TONE_ID = "toneId"

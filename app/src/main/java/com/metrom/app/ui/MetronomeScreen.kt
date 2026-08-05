@@ -92,7 +92,6 @@ import com.metrom.app.SessionPhase
 import com.metrom.app.data.SongPreset
 import com.metrom.app.engine.AccentNote
 import com.metrom.app.engine.BeatAccent
-import com.metrom.app.engine.ClickTone
 import com.metrom.app.engine.MetronomeEngine
 import com.metrom.app.engine.Subdivision
 import com.metrom.app.engine.SwingFeel
@@ -990,10 +989,10 @@ private fun ControlRows(state: MetronomeUiState, viewModel: MetronomeViewModel) 
             }
         }
         LabeledChipRow(label = "SOUND") {
-            ClickTone.entries.forEach { tone ->
+            state.toneOptions.forEach { tone ->
                 ChoiceChip(
                     label = tone.label,
-                    selected = state.tone == tone,
+                    selected = state.tone.id == tone.id,
                     onClick = { viewModel.setTone(tone) }
                 )
             }

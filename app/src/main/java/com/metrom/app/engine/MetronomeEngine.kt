@@ -1,5 +1,6 @@
 package com.metrom.app.engine
 
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -8,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
+import android.util.Log
 import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -114,6 +116,7 @@ data class BeatEvent(
  */
 class MetronomeEngine(
     private val audioManager: AudioManager? = null,
+    private val appContext: Context? = null,
     private val onBeat: (BeatEvent) -> Unit = {}
 ) {
     private val playing = AtomicBoolean(false)
@@ -124,7 +127,12 @@ class MetronomeEngine(
     private val groupTempo = AtomicBoolean(false)
     private val subdivision = AtomicReference(Subdivision.QUARTER)
     private val swing = AtomicReference(SwingFeel.OFF)
-    private val tone = AtomicReference(ClickTone.WOOD)
+    private val tone = AtomicReference<MetronomeTone>(MetronomeTone.DEFAULT)
+    /**
+     * Pre-decoded sample PCM for the active sample tone.
+     * Set in [setTone] only — the audio loop never loads or decodes.
+     */
+    private val sampleBuffers = AtomicReference<CachedSampleBuffers?>(null)
     private val accentNote = AtomicReference(AccentNote.DEFAULT)
     /** 0=MUTE, 1=NORMAL, 2=STRONG — length matches beatsPerBar. */
     private val beatAccents = AtomicReference(intArrayOf(2, 1, 1, 1))
@@ -190,8 +198,42 @@ class MetronomeEngine(
         swing.set(value)
     }
 
+    /** Legacy synth-only entry point — kept until UI selects [MetronomeTone]. */
     fun setTone(value: ClickTone) {
-        tone.set(value)
+        setTone(MetronomeTone.Synth(value))
+    }
+
+    /**
+     * Select the active tone. Sample tones are decoded here (or pulled from
+     * [SampleToneCache]); the audio loop only swaps already-cached ShortArrays.
+     * Invalid/missing samples fall back to [MetronomeTone.DEFAULT].
+     * @return the tone actually applied
+     */
+    fun setTone(value: MetronomeTone): MetronomeTone {
+        when (value) {
+            is MetronomeTone.Synth -> {
+                sampleBuffers.set(null)
+                tone.set(value)
+                return value
+            }
+            is MetronomeTone.Sample -> {
+                val ctx = appContext?.applicationContext
+                val buffers = if (ctx != null) {
+                    SampleToneCache.get(ctx, value.tone)
+                } else {
+                    SampleToneCache.peek(value.tone.id)
+                }
+                if (buffers == null) {
+                    Log.w(TAG, "Sample tone '${value.tone.id}' unavailable — falling back to ${MetronomeTone.DEFAULT.id}")
+                    sampleBuffers.set(null)
+                    tone.set(MetronomeTone.DEFAULT)
+                    return MetronomeTone.DEFAULT
+                }
+                sampleBuffers.set(buffers)
+                tone.set(value)
+                return value
+            }
+        }
     }
 
     fun setAccentNote(value: AccentNote) {
@@ -260,7 +302,7 @@ class MetronomeEngine(
         Thread({
             var preview: AudioTrack? = null
             try {
-                val pcm = ClickSynthesizer.generate(tone.get(), accent, accentNote.get())
+                val pcm = resolvePreviewPcm(accent)
                 val bytes = pcm.size * BYTES_PER_SAMPLE
                 preview = AudioTrack.Builder()
                     .setAudioAttributes(
@@ -380,8 +422,9 @@ class MetronomeEngine(
 
         var lastTone = tone.get()
         var lastAccent = accentNote.get()
-        var cachedAccent = ClickSynthesizer.generate(lastTone, accent = true, lastAccent)
-        var cachedNormal = ClickSynthesizer.generate(lastTone, accent = false, lastAccent)
+        var lastSamples = sampleBuffers.get()
+        var (cachedAccent, cachedNormal, cachedSubdivision) =
+            resolveCachedClicks(lastTone, lastAccent, lastSamples)
 
         var activeClick: ShortArray? = null
         var activeClickIndex = 0
@@ -393,11 +436,18 @@ class MetronomeEngine(
             while (playing.get()) {
                 val currentTone = tone.get()
                 val currentAccent = accentNote.get()
-                if (currentTone != lastTone || currentAccent != lastAccent) {
-                    cachedAccent = ClickSynthesizer.generate(currentTone, accent = true, currentAccent)
-                    cachedNormal = ClickSynthesizer.generate(currentTone, accent = false, currentAccent)
+                val currentSamples = sampleBuffers.get()
+                if (currentTone != lastTone ||
+                    currentAccent != lastAccent ||
+                    currentSamples !== lastSamples
+                ) {
+                    val resolved = resolveCachedClicks(currentTone, currentAccent, currentSamples)
+                    cachedAccent = resolved.first
+                    cachedNormal = resolved.second
+                    cachedSubdivision = resolved.third
                     lastTone = currentTone
                     lastAccent = currentAccent
+                    lastSamples = currentSamples
                 }
 
                 val pitchAccent = currentAccent.hz != null
@@ -414,7 +464,11 @@ class MetronomeEngine(
                         val beatMuted = level == 0
                         val isAccent = !beatMuted && level >= 2 && pulseInBeat == 0
                         val isBeatPulse = pulseInBeat == 0
-                        activeClick = if (isAccent) cachedAccent else cachedNormal
+                        activeClick = when {
+                            isAccent -> cachedAccent
+                            isBeatPulse -> cachedNormal
+                            else -> cachedSubdivision
+                        }
                         activeClickIndex = 0
                         activeGain = if (muted.get() || !clicksEnabled.get() || beatMuted) {
                             0f
@@ -607,6 +661,41 @@ class MetronomeEngine(
         track = null
     }
 
+    /**
+     * Build the three click caches for the active tone.
+     * Sample path: uses pre-decoded buffers only (no I/O / no decode).
+     * Synth path: [ClickSynthesizer.generate] as before.
+     */
+    private fun resolveCachedClicks(
+        currentTone: MetronomeTone,
+        currentAccent: AccentNote,
+        samples: CachedSampleBuffers?,
+    ): Triple<ShortArray, ShortArray, ShortArray> {
+        if (currentTone is MetronomeTone.Sample && samples != null) {
+            val subdivision = samples.ghost ?: samples.normal
+            return Triple(samples.strong, samples.normal, subdivision)
+        }
+        val synth = (currentTone as? MetronomeTone.Synth)?.tone ?: ClickTone.WOOD
+        val accentPcm = ClickSynthesizer.generate(synth, accent = true, currentAccent)
+        val normalPcm = ClickSynthesizer.generate(synth, accent = false, currentAccent)
+        return Triple(accentPcm, normalPcm, normalPcm)
+    }
+
+    private fun resolvePreviewPcm(accent: Boolean): ShortArray {
+        return when (val current = tone.get()) {
+            is MetronomeTone.Sample -> {
+                val buffers = sampleBuffers.get()
+                if (buffers != null) {
+                    if (accent) buffers.strong else buffers.normal
+                } else {
+                    ClickSynthesizer.generate(ClickTone.WOOD, accent, accentNote.get())
+                }
+            }
+            is MetronomeTone.Synth ->
+                ClickSynthesizer.generate(current.tone, accent, accentNote.get())
+        }
+    }
+
     private data class PendingBeat(
         val frame: Long,
         val beatIndex: Int,
@@ -615,6 +704,7 @@ class MetronomeEngine(
     )
 
     companion object {
+        private const val TAG = "MetronomeEngine"
         const val MIN_BPM = 30
         const val MAX_BPM = 300
         private const val OUTPUT_GAIN = 1.35f

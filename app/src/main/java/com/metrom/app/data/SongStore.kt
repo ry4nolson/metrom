@@ -4,7 +4,7 @@ import android.content.SharedPreferences
 import com.metrom.app.MutePattern
 import com.metrom.app.engine.AccentNote
 import com.metrom.app.engine.BeatAccent
-import com.metrom.app.engine.ClickTone
+import com.metrom.app.engine.MetronomeTone
 import com.metrom.app.engine.Subdivision
 import com.metrom.app.engine.SwingFeel
 import com.metrom.app.engine.TimeSignature
@@ -18,7 +18,7 @@ data class SongPreset(
     val bpm: Int,
     val timeSignature: TimeSignature,
     val subdivision: Subdivision,
-    val tone: ClickTone,
+    val tone: MetronomeTone,
     val accentNote: AccentNote,
     val beatAccents: List<BeatAccent> = BeatAccent.defaultPattern(timeSignature.beats, timeSignature.noteValue),
     val swing: SwingFeel = SwingFeel.OFF,
@@ -30,7 +30,7 @@ data class SongPreset(
         bpm: Int,
         timeSignature: TimeSignature,
         subdivision: Subdivision,
-        tone: ClickTone,
+        tone: MetronomeTone,
         accentNote: AccentNote,
         beatAccents: List<BeatAccent>,
         swing: SwingFeel,
@@ -61,36 +61,8 @@ class SongStore(private val prefs: SharedPreferences) {
             val array = JSONArray(raw)
             buildList {
                 for (i in 0 until array.length()) {
-                    val o = array.getJSONObject(i)
-                    val beats = o.getInt("beats")
-                    val noteValue = o.getInt("noteValue")
-                    add(
-                        SongPreset(
-                            id = o.getString("id"),
-                            name = o.getString("name"),
-                            bpm = o.getInt("bpm"),
-                            timeSignature = TimeSignature(beats = beats, noteValue = noteValue),
-                            subdivision = Subdivision.entries.getOrElse(o.getInt("subdivision")) {
-                                Subdivision.QUARTER
-                            },
-                            tone = ClickTone.entries.getOrElse(o.getInt("tone")) { ClickTone.WOOD },
-                            accentNote = AccentNote.entries.getOrElse(o.getInt("accentNote")) {
-                                AccentNote.DEFAULT
-                            },
-                            beatAccents = BeatAccent.decode(
-                                raw = if (o.has("beatAccents")) o.getString("beatAccents") else null,
-                                beats = beats,
-                                noteValue = noteValue
-                            ),
-                            swing = SwingFeel.entries.getOrElse(o.optInt("swing", 0)) { SwingFeel.OFF },
-                            groupTempo = o.optBoolean("groupTempo", false),
-                            countInBars = o.optInt("countInBars", 1),
-                            mutePattern = MutePattern(
-                                playBars = o.optInt("mutePlayBars", 1),
-                                silentBars = o.optInt("muteSilentBars", 0)
-                            )
-                        )
-                    )
+                    val o = array.optJSONObject(i) ?: continue
+                    parseSong(o)?.let { add(it) }
                 }
             }
         }.getOrDefault(emptyList())
@@ -107,7 +79,7 @@ class SongStore(private val prefs: SharedPreferences) {
                     .put("beats", song.timeSignature.beats)
                     .put("noteValue", song.timeSignature.noteValue)
                     .put("subdivision", song.subdivision.ordinal)
-                    .put("tone", song.tone.ordinal)
+                    .put("toneId", song.tone.id)
                     .put("accentNote", song.accentNote.ordinal)
                     .put("beatAccents", BeatAccent.encode(song.beatAccents))
                     .put("swing", song.swing.ordinal)
@@ -119,6 +91,38 @@ class SongStore(private val prefs: SharedPreferences) {
         }
         prefs.edit().putString(KEY, array.toString()).apply()
     }
+
+    private fun parseSong(o: JSONObject): SongPreset? = runCatching {
+        val toneId = o.optString("toneId", "").ifBlank { return null }
+        val tone = MetronomeTone.fromId(toneId) ?: return null
+        val beats = o.getInt("beats")
+        val noteValue = o.getInt("noteValue")
+        SongPreset(
+            id = o.getString("id"),
+            name = o.getString("name"),
+            bpm = o.getInt("bpm"),
+            timeSignature = TimeSignature(beats = beats, noteValue = noteValue),
+            subdivision = Subdivision.entries.getOrElse(o.getInt("subdivision")) {
+                Subdivision.QUARTER
+            },
+            tone = tone,
+            accentNote = AccentNote.entries.getOrElse(o.getInt("accentNote")) {
+                AccentNote.DEFAULT
+            },
+            beatAccents = BeatAccent.decode(
+                raw = if (o.has("beatAccents")) o.getString("beatAccents") else null,
+                beats = beats,
+                noteValue = noteValue
+            ),
+            swing = SwingFeel.entries.getOrElse(o.optInt("swing", 0)) { SwingFeel.OFF },
+            groupTempo = o.optBoolean("groupTempo", false),
+            countInBars = o.optInt("countInBars", 1),
+            mutePattern = MutePattern(
+                playBars = o.optInt("mutePlayBars", 1),
+                silentBars = o.optInt("muteSilentBars", 0)
+            )
+        )
+    }.getOrNull()
 
     companion object {
         private const val KEY = "songs_json"
