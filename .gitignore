@@ -26,3 +26,7 @@ keystore.properties
 # Local scratch
 .tmp-chug/
 *.log
+
+# Large archives
+*.zip
+app.zip
