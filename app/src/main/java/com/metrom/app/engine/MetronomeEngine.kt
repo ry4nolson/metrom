@@ -134,6 +134,8 @@ class MetronomeEngine(
      */
     private val sampleBuffers = AtomicReference<CachedSampleBuffers?>(null)
     private val accentNote = AtomicReference(AccentNote.DEFAULT)
+    /** Pitch for non-accent clicks when the tone supports pitch rows. OFF = natural. */
+    private val restNote = AtomicReference(AccentNote.OFF)
     /** 0=MUTE, 1=NORMAL, 2=STRONG — length matches beatsPerBar. */
     private val beatAccents = AtomicReference(intArrayOf(2, 1, 1, 1))
     private val volume = AtomicReference(1f)
@@ -238,6 +240,10 @@ class MetronomeEngine(
 
     fun setAccentNote(value: AccentNote) {
         accentNote.set(value)
+    }
+
+    fun setRestNote(value: AccentNote) {
+        restNote.set(value)
     }
 
     fun setVolume(value: Float) {
@@ -422,9 +428,10 @@ class MetronomeEngine(
 
         var lastTone = tone.get()
         var lastAccent = accentNote.get()
+        var lastRest = restNote.get()
         var lastSamples = sampleBuffers.get()
         var (cachedAccent, cachedNormal, cachedSubdivision) =
-            resolveCachedClicks(lastTone, lastAccent, lastSamples)
+            resolveCachedClicks(lastTone, lastAccent, lastRest, lastSamples)
 
         var activeClick: ShortArray? = null
         var activeClickIndex = 0
@@ -436,17 +443,25 @@ class MetronomeEngine(
             while (playing.get()) {
                 val currentTone = tone.get()
                 val currentAccent = accentNote.get()
+                val currentRest = restNote.get()
                 val currentSamples = sampleBuffers.get()
                 if (currentTone != lastTone ||
                     currentAccent != lastAccent ||
+                    currentRest != lastRest ||
                     currentSamples !== lastSamples
                 ) {
-                    val resolved = resolveCachedClicks(currentTone, currentAccent, currentSamples)
+                    val resolved = resolveCachedClicks(
+                        currentTone,
+                        currentAccent,
+                        currentRest,
+                        currentSamples
+                    )
                     cachedAccent = resolved.first
                     cachedNormal = resolved.second
                     cachedSubdivision = resolved.third
                     lastTone = currentTone
                     lastAccent = currentAccent
+                    lastRest = currentRest
                     lastSamples = currentSamples
                 }
 
@@ -664,20 +679,40 @@ class MetronomeEngine(
     /**
      * Build the three click caches for the active tone.
      * Sample path: uses pre-decoded buffers only (no I/O / no decode).
-     * Synth path: [ClickSynthesizer.generate] as before.
+     * When a sample tone has [SampleTone.rootHz], ONE pitch-shifts strong and
+     * REST pitch-shifts normal/ghost (same idea as the old CHUG path).
+     * Synth path: [ClickSynthesizer.generate] with ONE + REST.
      */
     private fun resolveCachedClicks(
         currentTone: MetronomeTone,
         currentAccent: AccentNote,
+        currentRest: AccentNote,
         samples: CachedSampleBuffers?,
     ): Triple<ShortArray, ShortArray, ShortArray> {
         if (currentTone is MetronomeTone.Sample && samples != null) {
-            val subdivision = samples.ghost ?: samples.normal
-            return Triple(samples.strong, samples.normal, subdivision)
+            val root = currentTone.tone.rootHz
+            val strong = pitchShiftedSample(samples.strong, root, currentAccent)
+            val normal = pitchShiftedSample(samples.normal, root, currentRest)
+            val subdivision = pitchShiftedSample(
+                source = samples.ghost ?: samples.normal,
+                rootHz = root,
+                note = currentRest,
+            )
+            return Triple(strong, normal, subdivision)
         }
         val synth = (currentTone as? MetronomeTone.Synth)?.tone ?: ClickTone.WOOD
-        val accentPcm = ClickSynthesizer.generate(synth, accent = true, currentAccent)
-        val normalPcm = ClickSynthesizer.generate(synth, accent = false, currentAccent)
+        val accentPcm = ClickSynthesizer.generate(
+            synth,
+            accent = true,
+            accentNote = currentAccent,
+            restNote = currentRest,
+        )
+        val normalPcm = ClickSynthesizer.generate(
+            synth,
+            accent = false,
+            accentNote = currentAccent,
+            restNote = currentRest,
+        )
         return Triple(accentPcm, normalPcm, normalPcm)
     }
 
@@ -686,14 +721,37 @@ class MetronomeEngine(
             is MetronomeTone.Sample -> {
                 val buffers = sampleBuffers.get()
                 if (buffers != null) {
-                    if (accent) buffers.strong else buffers.normal
+                    val note = if (accent) accentNote.get() else restNote.get()
+                    val source = if (accent) buffers.strong else buffers.normal
+                    pitchShiftedSample(source, current.tone.rootHz, note)
                 } else {
-                    ClickSynthesizer.generate(ClickTone.WOOD, accent, accentNote.get())
+                    ClickSynthesizer.generate(
+                        ClickTone.WOOD,
+                        accent,
+                        accentNote.get(),
+                        restNote.get(),
+                    )
                 }
             }
             is MetronomeTone.Synth ->
-                ClickSynthesizer.generate(current.tone, accent, accentNote.get())
+                ClickSynthesizer.generate(
+                    current.tone,
+                    accent,
+                    accentNote.get(),
+                    restNote.get(),
+                )
         }
+    }
+
+    /** Pitch-shift a sample one-shot when [note] is active and the tone has a root. */
+    private fun pitchShiftedSample(
+        source: ShortArray,
+        rootHz: Double?,
+        note: AccentNote,
+    ): ShortArray {
+        if (rootHz == null || note.hz == null) return source
+        val target = PcmPitch.sampleNoteHz(note, rootHz)
+        return PcmPitch.shift(source, baseHz = rootHz, targetHz = target)
     }
 
     private data class PendingBeat(

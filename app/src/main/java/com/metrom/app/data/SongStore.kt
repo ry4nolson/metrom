@@ -20,6 +20,7 @@ data class SongPreset(
     val subdivision: Subdivision,
     val tone: MetronomeTone,
     val accentNote: AccentNote,
+    val restNote: AccentNote = AccentNote.OFF,
     val beatAccents: List<BeatAccent> = BeatAccent.defaultPattern(timeSignature.beats, timeSignature.noteValue),
     val swing: SwingFeel = SwingFeel.OFF,
     val groupTempo: Boolean = false,
@@ -32,6 +33,7 @@ data class SongPreset(
         subdivision: Subdivision,
         tone: MetronomeTone,
         accentNote: AccentNote,
+        restNote: AccentNote,
         beatAccents: List<BeatAccent>,
         swing: SwingFeel,
         groupTempo: Boolean,
@@ -42,6 +44,7 @@ data class SongPreset(
         this.subdivision == subdivision &&
         this.tone == tone &&
         this.accentNote == accentNote &&
+        this.restNote == restNote &&
         this.beatAccents == beatAccents &&
         this.swing == swing &&
         this.groupTempo == groupTempo &&
@@ -81,6 +84,7 @@ class SongStore(private val prefs: SharedPreferences) {
                     .put("subdivision", song.subdivision.ordinal)
                     .put("toneId", song.tone.id)
                     .put("accentNote", song.accentNote.ordinal)
+                    .put("restNote", song.restNote.ordinal)
                     .put("beatAccents", BeatAccent.encode(song.beatAccents))
                     .put("swing", song.swing.ordinal)
                     .put("groupTempo", song.groupTempo)
@@ -108,6 +112,9 @@ class SongStore(private val prefs: SharedPreferences) {
             tone = tone,
             accentNote = AccentNote.entries.getOrElse(o.getInt("accentNote")) {
                 AccentNote.DEFAULT
+            },
+            restNote = AccentNote.entries.getOrElse(o.optInt("restNote", AccentNote.OFF.ordinal)) {
+                AccentNote.OFF
             },
             beatAccents = BeatAccent.decode(
                 raw = if (o.has("beatAccents")) o.getString("beatAccents") else null,

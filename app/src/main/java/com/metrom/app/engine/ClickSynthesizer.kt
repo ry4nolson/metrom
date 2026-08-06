@@ -16,17 +16,30 @@ enum class ClickTone(val label: String) {
 }
 
 /**
- * Pitch used for beat 1 (the meter downbeat).
- * [hz] null = no pitch accent — same note as the other beats.
+ * Pitch for ONE (accent) / OTHERS (non-accent) clicks.
+ * Chromatic A3–E5. [hz] null = Off — use the tone's natural pitch.
  */
 enum class AccentNote(val label: String, val hz: Double?) {
     OFF("Off", null),
-    A3("A3", 220.0),
+    A3("A3", 220.00),
+    AS3("A#3", 233.08),
+    B3("B3", 246.94),
     C4("C4", 261.63),
+    CS4("C#4", 277.18),
+    D4("D4", 293.66),
+    DS4("D#4", 311.13),
     E4("E4", 329.63),
-    G4("G4", 392.0),
-    A4("A4", 440.0),
+    F4("F4", 349.23),
+    FS4("F#4", 369.99),
+    G4("G4", 392.00),
+    GS4("G#4", 415.30),
+    A4("A4", 440.00),
+    AS4("A#4", 466.16),
+    B4("B4", 493.88),
     C5("C5", 523.25),
+    CS5("C#5", 554.37),
+    D5("D5", 587.33),
+    DS5("D#5", 622.25),
     E5("E5", 659.25);
 
     companion object {
@@ -49,16 +62,23 @@ object ClickSynthesizer {
         ClickTone.CHUG -> 123.47 // B2 — matches rendered samples
     }
 
-    fun generate(tone: ClickTone, accent: Boolean, accentNote: AccentNote): ShortArray {
+    fun generate(
+        tone: ClickTone,
+        accent: Boolean,
+        accentNote: AccentNote,
+        restNote: AccentNote = AccentNote.OFF,
+    ): ShortArray {
         if (tone == ClickTone.CHUG) {
             val root = when {
                 accent && accentNote.hz != null -> accentNote.hz / 4.0
+                !accent && restNote.hz != null -> restNote.hz / 4.0
                 else -> baseHz(tone)
             }
             return chugSample(root, accent)
         }
         val hz = when {
             accent && accentNote.hz != null -> accentNote.hz
+            !accent && restNote.hz != null -> restNote.hz
             else -> baseHz(tone)
         }
         val accented = accent && accentNote.hz != null

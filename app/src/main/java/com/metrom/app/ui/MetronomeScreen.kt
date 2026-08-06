@@ -997,13 +997,24 @@ private fun ControlRows(state: MetronomeUiState, viewModel: MetronomeViewModel) 
                 )
             }
         }
-        LabeledChipRow(label = "ONE") {
-            AccentNote.entries.forEach { note ->
-                ChoiceChip(
-                    label = note.label,
-                    selected = state.accentNote == note,
-                    onClick = { viewModel.setAccentNote(note) }
-                )
+        if (state.tone.supportsPitchAccent) {
+            LabeledChipRow(label = "ONE") {
+                AccentNote.entries.forEach { note ->
+                    ChoiceChip(
+                        label = note.label,
+                        selected = state.accentNote == note,
+                        onClick = { viewModel.setAccentNote(note) }
+                    )
+                }
+            }
+            LabeledChipRow(label = "OTHERS") {
+                AccentNote.entries.forEach { note ->
+                    ChoiceChip(
+                        label = note.label,
+                        selected = state.restNote == note,
+                        onClick = { viewModel.setRestNote(note) }
+                    )
+                }
             }
         }
     }

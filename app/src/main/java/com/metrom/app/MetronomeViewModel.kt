@@ -69,6 +69,8 @@ data class MetronomeUiState(
     /** Synth + loadable sample tones for the SOUND selector. */
     val toneOptions: List<MetronomeTone> = emptyList(),
     val accentNote: AccentNote = AccentNote.DEFAULT,
+    /** Pitch for non-accent clicks (REST). OFF = tone natural pitch. */
+    val restNote: AccentNote = AccentNote.OFF,
     val beatAccents: List<BeatAccent> = BeatAccent.defaultPattern(4, 4),
     val volume: Float = 1f,
     val muted: Boolean = false,
@@ -162,6 +164,9 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
                 accentNote = AccentNote.entries.getOrElse(prefs.getInt("accentNote", AccentNote.DEFAULT.ordinal)) {
                     AccentNote.DEFAULT
                 },
+                restNote = AccentNote.entries.getOrElse(prefs.getInt("restNote", AccentNote.OFF.ordinal)) {
+                    AccentNote.OFF
+                },
                 subdivision = Subdivision.entries.getOrElse(prefs.getInt("subdivision", 0)) { Subdivision.QUARTER }
                     .let { stored ->
                         if (!prefs.contains("subdivision")) Subdivision.QUARTER else stored
@@ -216,6 +221,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         eng.setGroupTempo(s.groupTempo)
         eng.setTone(s.tone)
         eng.setAccentNote(s.accentNote)
+        eng.setRestNote(s.restNote)
         eng.setVolume(s.volume)
         eng.setMuted(s.muted)
     }
@@ -458,6 +464,13 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         if (preview && !_state.value.isPlaying) engine.previewClick(accent = true)
     }
 
+    fun setRestNote(note: AccentNote, preview: Boolean = true) {
+        engine.setRestNote(note)
+        _state.update { it.copy(restNote = note) }
+        prefs.edit().putInt("restNote", note.ordinal).apply()
+        if (preview && !_state.value.isPlaying) engine.previewClick(accent = false)
+    }
+
     fun previewTone() {
         engine.previewClick(accent = true)
     }
@@ -559,6 +572,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
                 s.subdivision,
                 s.tone,
                 s.accentNote,
+                s.restNote,
                 s.beatAccents,
                 s.swing,
                 s.groupTempo,
@@ -581,6 +595,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
             subdivision = s.subdivision,
             tone = s.tone,
             accentNote = s.accentNote,
+            restNote = s.restNote,
             beatAccents = s.beatAccents,
             swing = s.swing,
             groupTempo = s.groupTempo,
@@ -600,6 +615,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         setSwing(song.swing)
         setTone(song.tone, preview = false)
         setAccentNote(song.accentNote, preview = false)
+        setRestNote(song.restNote, preview = false)
         setCountInBars(song.countInBars)
         setMutePattern(song.mutePattern)
         val group = song.groupTempo && song.timeSignature.isCompound
@@ -653,6 +669,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
                 subdivision = s.subdivision,
                 tone = s.tone,
                 accentNote = s.accentNote,
+                restNote = s.restNote,
                 beatAccents = s.beatAccents,
                 swing = s.swing,
                 groupTempo = s.groupTempo,
@@ -949,6 +966,7 @@ private fun List<SongPreset>.dedupeSongs(): List<SongPreset> {
             song.subdivision.ordinal,
             song.tone.id,
             song.accentNote.ordinal,
+            song.restNote.ordinal,
             BeatAccent.encode(song.beatAccents),
             song.swing.ordinal,
             song.groupTempo,
