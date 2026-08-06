@@ -57,6 +57,8 @@ class MainActivity : ComponentActivity() {
                 // Only while resumed — leaving the screen on overnight with the
                 // pendulum animating will melt an emulator / trip system ANRs.
                 KeepScreenOnWhileResumed(enabled = state.isPlaying)
+                // Mic listen is foreground-only — release on pause.
+                CancelListenOnPause(viewModel = viewModel)
                 MetronomeScreen(viewModel = viewModel)
             }
         }
@@ -84,6 +86,20 @@ class MainActivity : ComponentActivity() {
             viewModel.stop()
         }
         super.onDestroy()
+    }
+}
+
+@Composable
+private fun CancelListenOnPause(viewModel: MetronomeViewModel) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                viewModel.onListenLifecyclePause()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 }
 

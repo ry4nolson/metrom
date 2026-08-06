@@ -1,5 +1,13 @@
 package com.metrom.app.ui
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.SystemClock
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -43,6 +51,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.rounded.BookmarkAdd
+import androidx.compose.material.icons.rounded.Hearing
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.TouchApp
@@ -55,7 +64,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,10 +73,12 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -80,15 +90,22 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.metrom.app.MetronomeUiState
 import com.metrom.app.MetronomeViewModel
 import com.metrom.app.MutePattern
 import com.metrom.app.SessionPhase
+import com.metrom.app.audio.detect.DetectDebug
+import com.metrom.app.audio.detect.DetectState
+import com.metrom.app.audio.detect.FailReason
+import com.metrom.app.audio.detect.OnsetEnvelope
 import com.metrom.app.data.SongPreset
 import com.metrom.app.engine.AccentNote
 import com.metrom.app.engine.BeatAccent
@@ -118,6 +135,8 @@ import kotlin.math.sin
 @Composable
 fun MetronomeScreen(viewModel: MetronomeViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val detectState by viewModel.detectState.collectAsStateWithLifecycle()
+    val detectDebug by viewModel.detectDebug.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -178,6 +197,20 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
                     modifier = Modifier.height(18.dp),
                     maxLines = 1
                 )
+                Spacer(modifier = Modifier.height(10.dp))
+                ListenTempoStrip(
+                    state = state,
+                    detectState = detectState,
+                    viewModel = viewModel
+                )
+                if (detectDebug != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    ListenDebugPanel(
+                        debug = detectDebug!!,
+                        onApplyBpm = viewModel::applyListenBpm,
+                        onClear = viewModel::clearListenDebug
+                    )
+                }
                 Spacer(modifier = Modifier.height(12.dp))
                 TempoPresets(state.bpm, onSelect = viewModel::setBpm)
                 PracticeStrip(state)
@@ -857,6 +890,569 @@ private fun PracticeStrip(state: MetronomeUiState) {
                 color = EmberSoft
             )
         }
+    }
+}
+
+@Composable
+private fun ListenTempoStrip(
+    state: MetronomeUiState,
+    detectState: DetectState,
+    viewModel: MetronomeViewModel
+) {
+    val context = LocalContext.current
+    val activity = context as? android.app.Activity
+    var askedOnce by rememberSaveable { mutableStateOf(false) }
+    var showRationale by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        askedOnce = true
+        if (granted) {
+            showRationale = false
+            viewModel.startListen()
+        } else {
+            val permanent = activity != null &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(
+                    activity,
+                    Manifest.permission.RECORD_AUDIO
+                )
+            showRationale = true
+            if (permanent) {
+                // Keep rationale visible; Settings chip is offered below.
+            }
+        }
+    }
+
+    fun requestMicOrStart() {
+        if (state.isPlaying) return
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            showRationale = false
+            viewModel.startListen()
+            return
+        }
+        if (activity != null &&
+            askedOnce &&
+            !ActivityCompat.shouldShowRequestPermissionRationale(
+                activity,
+                Manifest.permission.RECORD_AUDIO
+            )
+        ) {
+            showRationale = true
+            return
+        }
+        if (activity != null &&
+            ActivityCompat.shouldShowRequestPermissionRationale(
+                activity,
+                Manifest.permission.RECORD_AUDIO
+            )
+        ) {
+            showRationale = true
+        }
+        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    LaunchedEffect(detectState) {
+        when (detectState) {
+            is DetectState.Failed -> {
+                when (detectState.reason) {
+                    // Keep NO_CLEAR_BEAT up so the debug panel stays readable.
+                    FailReason.NO_CLEAR_BEAT -> Unit
+                    FailReason.CANCELLED -> viewModel.resetListen()
+                    FailReason.PERMISSION_DENIED -> showRationale = true
+                    FailReason.MIC_UNAVAILABLE -> {
+                        delay(1800)
+                        viewModel.resetListen()
+                    }
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        when (val ds = detectState) {
+            DetectState.Idle -> {
+                val enabled = !state.isPlaying
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.alpha(if (enabled) 1f else 0.35f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Hearing,
+                        contentDescription = null,
+                        tint = if (enabled) Copper else Ash,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    ChoiceChip(
+                        label = "Listen",
+                        selected = false,
+                        onClick = { if (enabled) requestMicOrStart() }
+                    )
+                    if (!enabled) {
+                        Text(
+                            text = "stop to listen",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Ash
+                        )
+                    }
+                }
+            }
+
+            is DetectState.Listening -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.size(36.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val stroke = 3.dp.toPx()
+                            drawCircle(
+                                color = InkLine,
+                                style = Stroke(width = stroke)
+                            )
+                            drawArc(
+                                color = Ember,
+                                startAngle = -90f,
+                                sweepAngle = 360f * ds.progress,
+                                useCenter = false,
+                                style = Stroke(width = stroke, cap = StrokeCap.Round)
+                            )
+                        }
+                        Text(
+                            text = "${(ds.progress * 8f).roundToInt()}s",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Mist,
+                            fontSize = 10.sp
+                        )
+                    }
+                    Text(
+                        text = "listening…",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = EmberSoft
+                    )
+                    ChoiceChip(
+                        label = "Cancel",
+                        selected = false,
+                        onClick = viewModel::cancelListen
+                    )
+                }
+            }
+
+            DetectState.Analyzing -> {
+                Text(
+                    text = "finding the beat…",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Copper
+                )
+            }
+
+            is DetectState.Success -> {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "pick a tempo",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Bone
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ds.options.forEach { bpm ->
+                            ChoiceChip(
+                                label = bpm.toString(),
+                                selected = false,
+                                onClick = { viewModel.applyListenBpm(bpm) }
+                            )
+                        }
+                        ChoiceChip(
+                            label = "Dismiss",
+                            selected = false,
+                            onClick = viewModel::resetListen
+                        )
+                    }
+                }
+            }
+
+            is DetectState.Failed -> {
+                when (ds.reason) {
+                    FailReason.NO_CLEAR_BEAT -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "couldn't find a beat",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Ash
+                            )
+                            ChoiceChip(
+                                label = "Dismiss",
+                                selected = false,
+                                onClick = viewModel::resetListen
+                            )
+                        }
+                    }
+                    FailReason.MIC_UNAVAILABLE -> {
+                        Text(
+                            text = "mic unavailable",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Ash
+                        )
+                    }
+                    FailReason.PERMISSION_DENIED -> {
+                        // Rationale row below.
+                    }
+                    FailReason.CANCELLED -> Unit
+                }
+            }
+        }
+
+        val failedReason = (detectState as? DetectState.Failed)?.reason
+        if (showRationale || failedReason == FailReason.PERMISSION_DENIED) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "mic access needed to listen",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Ash
+                )
+                ChoiceChip(
+                    label = "Allow",
+                    selected = false,
+                    onClick = {
+                        val permanent = activity != null &&
+                            askedOnce &&
+                            !ActivityCompat.shouldShowRequestPermissionRationale(
+                                activity,
+                                Manifest.permission.RECORD_AUDIO
+                            )
+                        if (permanent) {
+                            val intent = Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.fromParts("package", context.packageName, null)
+                            )
+                            context.startActivity(intent)
+                        } else {
+                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    }
+                )
+                if (askedOnce && activity != null &&
+                    !ActivityCompat.shouldShowRequestPermissionRationale(
+                        activity,
+                        Manifest.permission.RECORD_AUDIO
+                    )
+                ) {
+                    ChoiceChip(
+                        label = "Settings",
+                        selected = false,
+                        onClick = {
+                            val intent = Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.fromParts("package", context.packageName, null)
+                            )
+                            context.startActivity(intent)
+                        }
+                    )
+                }
+                ChoiceChip(
+                    label = "Dismiss",
+                    selected = false,
+                    onClick = {
+                        showRationale = false
+                        viewModel.resetListen()
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ListenDebugPanel(
+    debug: DetectDebug,
+    onApplyBpm: (Int) -> Unit,
+    onClear: () -> Unit
+) {
+    val summary = buildString {
+        append(if (debug.accepted) "options" else "rejected")
+        append(" · conf ${"%.2f".format(debug.confidence)}")
+        debug.bpm?.let { append(" · overlay $it") }
+        if (debug.octaveDoubled) append(" · ×2")
+    }
+    ExpandablePanel(
+        title = "LISTEN DEBUG",
+        summary = summary,
+        initiallyExpanded = true
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "waveform + assumed beats",
+                style = MaterialTheme.typography.labelMedium,
+                color = Ash
+            )
+            DebugWaveform(
+                samples = debug.waveform,
+                beatTimesSec = debug.beatTimesSec,
+                durationSec = debug.durationSec,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp)
+            )
+
+            Text(
+                text = "onset envelope + beats",
+                style = MaterialTheme.typography.labelMedium,
+                color = Ash
+            )
+            DebugOnset(
+                onset = debug.onset,
+                beatTimesSec = debug.beatTimesSec,
+                durationSec = debug.durationSec,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+            )
+
+            Text(
+                text = "autocorrelation (30–300 BPM)",
+                style = MaterialTheme.typography.labelMedium,
+                color = Ash
+            )
+            DebugAcf(
+                acf = debug.acf,
+                winnerBpm = debug.bpm,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+            )
+
+            Text(
+                text = buildString {
+                    append("conf ${"%.3f".format(debug.confidence)}")
+                    append(if (debug.accepted) " ≥ 0.30 → accept" else " < 0.30 → reject")
+                    if (debug.octaveDoubled) append(" · octave doubled")
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = if (debug.accepted) EmberSoft else Ash
+            )
+
+            if (debug.candidates.isNotEmpty()) {
+                Text(
+                    text = "candidates (tap to try)",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Ash
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    debug.candidates.forEach { c ->
+                        val label = buildString {
+                            append("${c.bpm}")
+                            if (c.isWinner) append(" ★")
+                            c.promotedFrom?.let { append(" ←$it") }
+                            append("  raw ${"%.3f".format(c.rawPeak)}")
+                            append("  score ${"%.3f".format(c.score)}")
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (c.isWinner) Ember.copy(alpha = 0.14f)
+                                    else Ink.copy(alpha = 0.35f)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (c.isWinner) Ember.copy(alpha = 0.55f) else InkLine,
+                                    RoundedCornerShape(10.dp)
+                                )
+                                .clickable { onApplyBpm(c.bpm) }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (c.isWinner) EmberSoft else Mist,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "use",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Copper
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (debug.bpm != null && debug.octaveDoubled) {
+                Text(
+                    text = "final after ×2: ${debug.bpm}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Copper
+                )
+                ChoiceChip(
+                    label = "Use ${debug.bpm}",
+                    selected = true,
+                    onClick = { onApplyBpm(debug.bpm) }
+                )
+            }
+
+            ChoiceChip(
+                label = "Clear debug",
+                selected = false,
+                onClick = onClear
+            )
+        }
+    }
+}
+
+@Composable
+private fun DebugWaveform(
+    samples: FloatArray,
+    beatTimesSec: FloatArray,
+    durationSec: Float,
+    modifier: Modifier = Modifier
+) {
+    Canvas(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Ink)
+            .border(1.dp, InkLine, RoundedCornerShape(12.dp))
+            .padding(4.dp)
+    ) {
+        if (samples.isEmpty()) return@Canvas
+        val midY = size.height / 2f
+        var maxAbs = 1e-6f
+        for (v in samples) {
+            val a = abs(v)
+            if (a > maxAbs) maxAbs = a
+        }
+        val path = Path()
+        val n = samples.size
+        for (i in 0 until n) {
+            val x = i.toFloat() / (n - 1).coerceAtLeast(1) * size.width
+            val y = midY - (samples[i] / maxAbs) * midY * 0.9f
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawPath(path, color = Mist, style = Stroke(width = 1.5f))
+        drawBeatMarkers(beatTimesSec, durationSec, EmberSoft.copy(alpha = 0.85f))
+    }
+}
+
+@Composable
+private fun DebugOnset(
+    onset: FloatArray,
+    beatTimesSec: FloatArray,
+    durationSec: Float,
+    modifier: Modifier = Modifier
+) {
+    Canvas(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Ink)
+            .border(1.dp, InkLine, RoundedCornerShape(12.dp))
+            .padding(4.dp)
+    ) {
+        if (onset.isEmpty()) return@Canvas
+        var max = 1e-6f
+        for (v in onset) if (v > max) max = v
+        val path = Path()
+        val n = onset.size
+        for (i in 0 until n) {
+            val x = i.toFloat() / (n - 1).coerceAtLeast(1) * size.width
+            val y = size.height - (onset[i] / max) * size.height * 0.92f
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawPath(path, color = Copper, style = Stroke(width = 1.5f))
+        drawBeatMarkers(beatTimesSec, durationSec, Ember.copy(alpha = 0.9f))
+    }
+}
+
+@Composable
+private fun DebugAcf(
+    acf: FloatArray,
+    winnerBpm: Int?,
+    modifier: Modifier = Modifier
+) {
+    Canvas(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Ink)
+            .border(1.dp, InkLine, RoundedCornerShape(12.dp))
+            .padding(4.dp)
+    ) {
+        val lo = DetectDebug.ACF_MIN_LAG
+        val hi = DetectDebug.ACF_MAX_LAG
+        if (acf.size <= hi) return@Canvas
+        var minV = Float.MAX_VALUE
+        var maxV = -Float.MAX_VALUE
+        for (lag in lo..hi) {
+            val v = acf[lag]
+            if (v < minV) minV = v
+            if (v > maxV) maxV = v
+        }
+        val span = (maxV - minV).coerceAtLeast(1e-6f)
+        val path = Path()
+        val count = hi - lo
+        for (lag in lo..hi) {
+            val x = (lag - lo).toFloat() / count * size.width
+            val y = size.height - ((acf[lag] - minV) / span) * size.height * 0.92f
+            if (lag == lo) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        drawPath(path, color = Mist, style = Stroke(width = 1.5f))
+        if (winnerBpm != null && winnerBpm > 0) {
+            val lag = (60f * OnsetEnvelope.ENVELOPE_RATE / winnerBpm)
+                .roundToInt()
+                .coerceIn(lo, hi)
+            val x = (lag - lo).toFloat() / count * size.width
+            drawLine(
+                color = Ember,
+                start = Offset(x, 0f),
+                end = Offset(x, size.height),
+                strokeWidth = 2f
+            )
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBeatMarkers(
+    beatTimesSec: FloatArray,
+    durationSec: Float,
+    color: Color
+) {
+    if (durationSec <= 0f || beatTimesSec.isEmpty()) return
+    for (t in beatTimesSec) {
+        val x = (t / durationSec).coerceIn(0f, 1f) * size.width
+        drawLine(
+            color = color,
+            start = Offset(x, 0f),
+            end = Offset(x, size.height),
+            strokeWidth = 1.2f
+        )
     }
 }
 

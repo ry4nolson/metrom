@@ -16,6 +16,9 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
+import com.metrom.app.audio.detect.DetectDebug
+import com.metrom.app.audio.detect.DetectState
+import com.metrom.app.audio.detect.TempoDetector
 import com.metrom.app.data.SongPreset
 import com.metrom.app.data.SongStore
 import com.metrom.app.engine.AccentNote
@@ -196,6 +199,10 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         }
     )
     val state: StateFlow<MetronomeUiState> = _state.asStateFlow()
+
+    private val tempoDetector = TempoDetector(application)
+    val detectState: StateFlow<DetectState> = tempoDetector.state
+    val detectDebug: StateFlow<DetectDebug?> = tempoDetector.lastDebug
 
     private val tapTimes = ArrayDeque<Long>()
     private var lastBeatIndex = -1
@@ -705,6 +712,32 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /** One-shot mic listen. Gated here — detector never reads engine playing state. */
+    fun startListen() {
+        if (_state.value.isPlaying) return
+        tempoDetector.start()
+    }
+
+    fun cancelListen() = tempoDetector.cancel()
+
+    fun resetListen() = tempoDetector.reset()
+
+    fun clearListenDebug() = tempoDetector.clearDebug()
+
+    /** User picked one of the listen options (or a debug candidate). */
+    fun applyListenBpm(bpm: Int) {
+        setBpm(bpm)
+        tempoDetector.reset()
+    }
+
+    /** Release the mic when the UI leaves the foreground. */
+    fun onListenLifecyclePause() {
+        val s = tempoDetector.state.value
+        if (s is DetectState.Listening || s is DetectState.Analyzing) {
+            tempoDetector.cancel()
+        }
+    }
+
     private fun onBeat(event: BeatEvent) {
         // Detect bar boundaries (beat index wrapped back to 0)
         if (event.beatIndex == 0 && lastBeatIndex > 0) {
@@ -940,6 +973,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         mainHandler.removeCallbacksAndMessages(null)
         unregisterBecomingNoisy()
         abandonAudioFocus()
+        tempoDetector.cancel()
         engine.release()
         _state.update {
             it.copy(

@@ -4,6 +4,9 @@
     <!-- Beat haptics (ViewModel vibrator). Install-time permission. -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Ambient tempo listen (foreground only; not used by the playback FGS). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- Generic FGS declaration required to run a foreground service (API 28+). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
