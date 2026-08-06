@@ -334,13 +334,19 @@ final class IosMicCapture: NSObject, MicCapture {
         var discarded = 0
         var failed = false
         let collectLock = NSLock()
-        let captureStartedAt = CFAbsoluteTimeGetCurrent()
+        var totalInputFrames: Int64 = 0
+        var totalOutputFrames: Int64 = 0
+        var convertErrors = 0
 
         input.installTap(onBus: 0, bufferSize: 1024, format: hwFormat) { buffer, _ in
             if isCancelled().boolValue {
                 semaphore.signal()
                 return
             }
+
+            collectLock.lock()
+            totalInputFrames += Int64(buffer.frameLength)
+            collectLock.unlock()
 
             let ratio = targetRate / hwFormat.sampleRate
             let outFrames = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 32
@@ -360,11 +366,17 @@ final class IosMicCapture: NSObject, MicCapture {
                 return buffer
             }
             converter.convert(to: converted, error: &convertError, withInputFrom: inputBlock)
-            if convertError != nil { return }
+            if convertError != nil {
+                collectLock.lock()
+                convertErrors += 1
+                collectLock.unlock()
+                return
+            }
             guard let ch = converted.floatChannelData?[0] else { return }
             let frames = Int(converted.frameLength)
 
             collectLock.lock()
+            totalOutputFrames += Int64(converted.frameLength)
             for i in 0..<frames {
                 if discarded < discard {
                     discarded += 1
@@ -391,20 +403,25 @@ final class IosMicCapture: NSObject, MicCapture {
         }
 
         _ = semaphore.wait(timeout: .now() + Double(seconds) + 2.0)
-        let elapsed = CFAbsoluteTimeGetCurrent() - captureStartedAt
         input.removeTap(onBus: 0)
         eng.stop()
 
         collectLock.lock()
         let snapshot = collected
+        let inFrames = totalInputFrames
+        let outFrames = totalOutputFrames
+        let errors = convertErrors
         collectLock.unlock()
+
+        let measuredRatio = inFrames > 0 ? Double(outFrames) / Double(inFrames) : 0.0
+        NSLog(
+            "Metrom: mic converter in=%lld out=%lld ratio=%.5f errors=%d",
+            inFrames, outFrames, measuredRatio, errors
+        )
 
         if failed || isCancelled().boolValue || snapshot.count < total {
             return nil
         }
-
-        NSLog("Metrom: mic snapshot.count=%d total=%d", snapshot.count, total)
-        NSLog("Metrom: mic capture elapsed=%.3f s", elapsed)
 
         let arr = KotlinFloatArray(size: Int32(snapshot.count))
         for (i, v) in snapshot.enumerated() {
