@@ -7,15 +7,22 @@ import android.media.AudioTrack
 import android.util.Log
 import com.metrom.shared.platform.AudioRouteHint
 import com.metrom.shared.platform.AudioSink
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.max
 
 class AndroidAudioSink(
     private val audioManager: AudioManager?,
 ) : AudioSink {
-    @Volatile private var track: AudioTrack? = null
+    /**
+     * Sole owner of the live [AudioTrack].
+     * Release takes ownership via [AtomicReference.getAndSet]; the winner releases,
+     * every other caller sees null and is a no-op. No shared lock needed for dispose.
+     */
+    private val track = AtomicReference<AudioTrack?>(null)
 
     override fun start(sampleRate: Int, channelCount: Int, preferredBufferFrames: Int): Int {
-        dispose()
+        // Fully release any prior track before building a new one (no orphans).
+        releaseOwnedTrack()
         val minBufBytes = AudioTrack.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_OUT_MONO,
@@ -50,14 +57,14 @@ class AndroidAudioSink(
             .setBufferSizeInBytes(trackBufferBytes)
             .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_NONE)
             .build()
-        track = local
+        track.set(local)
         local.setVolume(1f)
         local.play()
         return writeFrames
     }
 
     override fun write(pcm: ShortArray, offset: Int, count: Int): Int {
-        val t = track ?: return -1
+        val t = track.get() ?: return -1
         return try {
             t.write(pcm, offset, count, AudioTrack.WRITE_BLOCKING)
         } catch (_: IllegalStateException) {
@@ -68,7 +75,7 @@ class AndroidAudioSink(
     }
 
     override fun playbackHeadFrames(): Long {
-        val t = track ?: return 0L
+        val t = track.get() ?: return 0L
         return try {
             Integer.toUnsignedLong(t.playbackHeadPosition)
         } catch (_: Exception) {
@@ -78,10 +85,10 @@ class AndroidAudioSink(
 
     /**
      * Unblock a pending [write] (pause + flush). Keeps the [AudioTrack] reference valid.
-     * Idempotent. Does not release.
+     * Does not release. Safe if the track is already gone.
      */
     override fun stop() {
-        val t = track ?: return
+        val t = track.get() ?: return
         try {
             t.pause()
         } catch (_: Exception) {
@@ -93,11 +100,27 @@ class AndroidAudioSink(
     }
 
     /**
-     * Unblock if needed, then release the track. Idempotent.
+     * Unblock if needed, then release. Only the [AtomicReference.getAndSet] winner
+     * performs native release; concurrent callers are no-ops.
      */
     override fun dispose() {
-        val t = track ?: return
-        stop()
+        releaseOwnedTrack()
+    }
+
+    /**
+     * Claim the current track (or nothing) and release it.
+     * `getAndSet(null)` is the ownership handoff: exactly one caller wins.
+     */
+    private fun releaseOwnedTrack() {
+        val t = track.getAndSet(null) ?: return
+        try {
+            t.pause()
+        } catch (_: Exception) {
+        }
+        try {
+            t.flush()
+        } catch (_: Exception) {
+        }
         try {
             t.stop()
         } catch (_: Exception) {
@@ -106,11 +129,10 @@ class AndroidAudioSink(
             t.release()
         } catch (_: Exception) {
         }
-        if (track === t) track = null
     }
 
     override fun routeHint(): AudioRouteHint {
-        val t = track
+        val t = track.get()
         val routed = try {
             t?.routedDevice
         } catch (_: Exception) {
@@ -124,7 +146,7 @@ class AndroidAudioSink(
 
     override fun setVolume(volume: Float) {
         try {
-            track?.setVolume(volume.coerceIn(0f, 1f))
+            track.get()?.setVolume(volume.coerceIn(0f, 1f))
         } catch (_: Exception) {
         }
     }

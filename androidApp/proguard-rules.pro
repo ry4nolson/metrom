@@ -19,12 +19,8 @@
 -keep enum com.metrom.shared.domain.BeatAccent
 -keep enum com.metrom.shared.domain.SessionPhase
 
-# SongDto / kotlinx.serialization: the kotlinx-serialization-core (and json)
-# artifacts ship consumer ProGuard rules that keep generated $serializer
-# classes and companion serializers. No redundant SongDto keep needed here.
--keep class com.metrom.shared.data.SongPreset { *; }
--keep class com.metrom.shared.data.SongStore { *; }
--keep class com.metrom.shared.domain.MutePattern { *; }
+# SongDto serializers: covered by kotlinx-serialization consumer ProGuard rules.
+# No keeps for SongPreset / SongStore / MutePattern — nothing reflects on them.
 
 -dontwarn androidx.compose.**
 -keepclassmembers class * extends androidx.lifecycle.ViewModel {

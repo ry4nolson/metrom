@@ -23,9 +23,9 @@ class AndroidEngineRunner(
                     Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
                     engine.runLoop()
                 } finally {
-                    // runLoop's finally only unblocks (sink.stop). Release here so a
-                    // natural write-error exit cannot leak the AudioTrack, and so a
-                    // racing stopLocked dispose after join is a no-op.
+                    // After runLoop returns, this thread may release. Main-thread
+                    // stopLocked may also release after join. AndroidAudioSink.dispose
+                    // uses AtomicReference.getAndSet — exactly one caller wins.
                     engine.markStopped()
                     try {
                         sink.dispose()
@@ -67,6 +67,7 @@ class AndroidEngineRunner(
     /**
      * Teardown order: mark stopped → unblock write → join audio thread → release track.
      * Join stays bounded at the existing 1500ms (+ one retry).
+     * Release is safe vs the audio-thread finally via AtomicReference.getAndSet in the sink.
      */
     private fun stopLocked(engine: MetronomeEngine) {
         engine.markStopped()
