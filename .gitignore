@@ -1,32 +1,44 @@
-*.iml
-.gradle/
-/local.properties
-/.idea/
-.DS_Store
-**/.DS_Store
-/build
-/app/build
-/captures
-.externalNativeBuild
-.cxx
+# Built application files
 *.apk
 *.ap_
 *.aab
 *.dex
+
+# Generated / build outputs (all modules)
+build/
 bin/
 gen/
 out/
+
+# Gradle
+.gradle/
+**/gradle-app.setting
+!gradle-wrapper.jar
+.gradletasknamecache
+
+# Kotlin
 .kotlin/
+
+# Local config / IDE
+local.properties
+*.iml
+.idea/
+.DS_Store
+**/.DS_Store
+captures/
+.externalNativeBuild
+.cxx
 
 # Signing / secrets
 keystore.properties
 *.jks
 *.keystore
 
-# Local scratch
-.tmp-chug/
+# Profiling / crash dumps
+*.hprof
 *.log
 
-# Large archives
+# Local scratch / archives
+.tmp-chug/
 *.zip
 app.zip

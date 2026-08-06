@@ -15,4 +15,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Metrom"
-include(":app")
+include(":shared")
+include(":androidApp")
