@@ -23,7 +23,14 @@ class AndroidEngineRunner(
                     Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
                     engine.runLoop()
                 } finally {
+                    // runLoop's finally only unblocks (sink.stop). Release here so a
+                    // natural write-error exit cannot leak the AudioTrack, and so a
+                    // racing stopLocked dispose after join is a no-op.
                     engine.markStopped()
+                    try {
+                        sink.dispose()
+                    } catch (_: Exception) {
+                    }
                 }
             }, "metrom-audio")
             audioThread = thread
@@ -57,8 +64,16 @@ class AndroidEngineRunner(
     override fun isRunning(engine: MetronomeEngine): Boolean =
         engine.playing && audioThread?.isAlive == true
 
+    /**
+     * Teardown order: mark stopped → unblock write → join audio thread → release track.
+     * Join stays bounded at the existing 1500ms (+ one retry).
+     */
     private fun stopLocked(engine: MetronomeEngine) {
         engine.markStopped()
+        try {
+            sink.stop()
+        } catch (_: Exception) {
+        }
         val thread = audioThread
         if (thread != null) {
             try {
@@ -74,6 +89,10 @@ class AndroidEngineRunner(
                 }
             }
             if (audioThread === thread) audioThread = null
+        }
+        try {
+            sink.dispose()
+        } catch (_: Exception) {
         }
     }
 }

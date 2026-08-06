@@ -134,9 +134,18 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun start() {
-        if (!requestAudioFocus()) return
-        registerBecomingNoisy()
+        if (!requestAudioFocus()) {
+            unregisterBecomingNoisy()
+            return
+        }
         controller.start()
+        // Keep becoming-noisy registration matched to actual playback.
+        if (state.value.isPlaying) {
+            registerBecomingNoisy()
+        } else {
+            unregisterBecomingNoisy()
+            abandonAudioFocus()
+        }
     }
 
     fun stop() {
@@ -183,7 +192,8 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     fun onListenLifecyclePause() = controller.onListenLifecyclePause()
 
     private fun requestAudioFocus(): Boolean {
-        abandonAudioFocus()
+        // Idempotent: start() and canStart() both call this; do not abandon/re-request.
+        if (focusRequest != null) return true
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -196,7 +206,9 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
             .build()
         val granted = audioManager.requestAudioFocus(request) ==
             AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-        if (granted) focusRequest = request
+        if (granted) {
+            focusRequest = request
+        }
         return granted
     }
 

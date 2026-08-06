@@ -94,7 +94,7 @@ class PlaybackService : Service() {
         )
 
         val playing = PlaybackBridge.playing
-        val playLabel = if (playing) "Pause" else "Play"
+        val playLabel = if (playing) "Stop" else "Play"
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_metrom)
             .setContentTitle(if (playing) "${PlaybackBridge.bpm} BPM" else "Metrom")

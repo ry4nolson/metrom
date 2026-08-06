@@ -75,6 +75,8 @@ class MetronomeEngine(
         playing = false
         mixer.setClicksEnabled(true)
         clock.cancelAll()
+        // Unblock a pending sink.write only — do not release the track here.
+        // Platform runners join the audio thread, then dispose/release.
         try {
             sink.stop()
         } catch (_: Exception) {

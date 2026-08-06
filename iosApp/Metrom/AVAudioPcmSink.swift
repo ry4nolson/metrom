@@ -44,8 +44,11 @@ final class AVAudioPcmSink: NSObject, AudioSink {
             try? session.setPreferredIOBufferDuration(0.005)
             try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try session.setActive(true)
-            if !loggedSampleRate {
-                loggedSampleRate = true
+            lock.lock()
+            let shouldLog = !loggedSampleRate
+            if shouldLog { loggedSampleRate = true }
+            lock.unlock()
+            if shouldLog {
                 let rate = session.sampleRate
                 if abs(rate - 44100) > 0.5 {
                     NSLog("Metrom: warning session sampleRate=%.1f (preferred 44100)", rate)
@@ -316,6 +319,7 @@ final class IosMicCapture: NSObject, MicCapture {
         let eng = AVAudioEngine()
         let input = eng.inputNode
         let hwFormat = input.outputFormat(forBus: 0)
+        NSLog("Metrom: mic hwFormat.sampleRate=%.1f", hwFormat.sampleRate)
         guard let targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: targetRate,
@@ -330,6 +334,7 @@ final class IosMicCapture: NSObject, MicCapture {
         var discarded = 0
         var failed = false
         let collectLock = NSLock()
+        let captureStartedAt = CFAbsoluteTimeGetCurrent()
 
         input.installTap(onBus: 0, bufferSize: 1024, format: hwFormat) { buffer, _ in
             if isCancelled().boolValue {
@@ -343,7 +348,6 @@ final class IosMicCapture: NSObject, MicCapture {
                 return
             }
 
-            converter.reset()
             var provided = false
             var convertError: NSError?
             let inputBlock: AVAudioConverterInputBlock = { _, outStatus in
@@ -387,6 +391,7 @@ final class IosMicCapture: NSObject, MicCapture {
         }
 
         _ = semaphore.wait(timeout: .now() + Double(seconds) + 2.0)
+        let elapsed = CFAbsoluteTimeGetCurrent() - captureStartedAt
         input.removeTap(onBus: 0)
         eng.stop()
 
@@ -397,6 +402,9 @@ final class IosMicCapture: NSObject, MicCapture {
         if failed || isCancelled().boolValue || snapshot.count < total {
             return nil
         }
+
+        NSLog("Metrom: mic snapshot.count=%d total=%d", snapshot.count, total)
+        NSLog("Metrom: mic capture elapsed=%.3f s", elapsed)
 
         let arr = KotlinFloatArray(size: Int32(snapshot.count))
         for (i, v) in snapshot.enumerated() {

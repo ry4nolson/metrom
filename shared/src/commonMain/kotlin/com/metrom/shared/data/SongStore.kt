@@ -25,7 +25,7 @@ data class SongPreset(
     val beatAccents: List<BeatAccent> = BeatAccent.defaultPattern(timeSignature.beats, timeSignature.noteValue),
     val swing: SwingFeel = SwingFeel.OFF,
     val groupTempo: Boolean = false,
-    val countInBars: Int = 1,
+    val countInBars: Int = 0,
     val mutePattern: MutePattern = MutePattern.OFF,
 ) {
     fun sameSetupAs(
@@ -72,7 +72,7 @@ private data class SongDto(
     val beatAccents: String? = null,
     val swing: Int = 0,
     val groupTempo: Boolean = false,
-    val countInBars: Int = 1,
+    val countInBars: Int = 0,
     val mutePlayBars: Int = 1,
     val muteSilentBars: Int = 0,
 )
@@ -85,10 +85,9 @@ class SongStore(private val prefs: PrefsStore) {
         return runCatching {
             json.decodeFromString<List<SongDto>>(raw).mapNotNull { it.toPreset() }
         }.getOrElse {
-            // Legacy org.json array format compatibility via loose parse
+            // Pre-release: discard corrupt state and reset.
+            prefs.remove(KEY)
             emptyList()
-        }.ifEmpty {
-            parseLegacy(raw)
         }
     }
 
@@ -132,14 +131,6 @@ class SongStore(private val prefs: PrefsStore) {
             countInBars = countInBars,
             mutePattern = MutePattern(mutePlayBars, muteSilentBars),
         )
-    }
-
-    /** Best-effort parse of previous org.json array format. */
-    private fun parseLegacy(raw: String): List<SongPreset> {
-        if (!raw.trimStart().startsWith("[")) return emptyList()
-        return runCatching {
-            json.decodeFromString<List<SongDto>>(raw).mapNotNull { it.toPreset() }
-        }.getOrDefault(emptyList())
     }
 
     companion object {
