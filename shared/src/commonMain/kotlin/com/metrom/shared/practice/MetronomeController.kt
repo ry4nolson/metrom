@@ -175,6 +175,23 @@ class MetronomeController(
         }
         applyBarGate(0)
         runner.start(engine)
+        if (!runner.isRunning(engine)) {
+            // Start refused (e.g. previous audio thread join timed out) or died immediately.
+            lastBeatIndex = -1
+            barIndex = 0
+            _state.update {
+                it.copy(
+                    isPlaying = false,
+                    activeBeat = -1,
+                    sessionBar = 0,
+                    sessionPhase = SessionPhase.IDLE,
+                    statusLine = "READY",
+                    tapHint = "AUDIO FAILED",
+                )
+            }
+            publishPlayback()
+            return
+        }
         _state.update {
             it.copy(
                 isPlaying = true,

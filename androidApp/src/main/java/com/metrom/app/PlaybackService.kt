@@ -94,8 +94,8 @@ class PlaybackService : Service() {
         )
 
         val playing = PlaybackBridge.playing
-        val playLabel = if (playing) "Stop" else "Play"
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        // (a) One action while playing: Stop. While idle: Play. Avoids Stop/Stop.
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_metrom)
             .setContentTitle(if (playing) "${PlaybackBridge.bpm} BPM" else "Metrom")
             .setContentText(
@@ -108,9 +108,12 @@ class PlaybackService : Service() {
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .addAction(0, playLabel, toggle)
-            .addAction(0, "Stop", stop)
-            .build()
+        if (playing) {
+            builder.addAction(0, "Stop", stop)
+        } else {
+            builder.addAction(0, "Play", toggle)
+        }
+        return builder.build()
     }
 
     private fun ensureChannel() {

@@ -18,8 +18,21 @@ interface AudioSink {
     fun start(sampleRate: Int, channelCount: Int, preferredBufferFrames: Int): Int
     fun write(pcm: ShortArray, offset: Int, count: Int): Int
     fun playbackHeadFrames(): Long
+
+    /**
+     * Unblock a pending [write] and stop producing audio.
+     * Must leave the underlying audio handle valid so an in-flight write can return
+     * safely. Does **not** release native resources — that is [dispose] only.
+     */
     fun stop()
+
+    /**
+     * Release the underlying audio handle and free native resources.
+     * The only release path. Safe to call more than once. After this returns,
+     * [write] / [stop] must be no-ops or return an error until the next [start].
+     */
     fun dispose()
+
     fun routeHint(): AudioRouteHint
     fun setVolume(volume: Float) {}
 }

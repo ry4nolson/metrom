@@ -123,6 +123,16 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         }
         PlaybackBridge.onToggle = { togglePlay() }
         PlaybackBridge.onStop = { stop() }
+        // Audio thread ended without a normal ViewModel.stop (start failure, write error).
+        runner.onSessionEnded = {
+            mainHandler.post {
+                if (!state.value.isPlaying) return@post
+                resumeAfterFocusGain = false
+                controller.stop()
+                unregisterBecomingNoisy()
+                abandonAudioFocus()
+            }
+        }
     }
 
     fun togglePlay() {

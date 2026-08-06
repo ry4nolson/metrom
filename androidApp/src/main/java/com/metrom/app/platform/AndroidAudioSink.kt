@@ -16,7 +16,7 @@ class AndroidAudioSink(
     /**
      * Sole owner of the live [AudioTrack].
      * Release takes ownership via [AtomicReference.getAndSet]; the winner releases,
-     * every other caller sees null and is a no-op. No shared lock needed for dispose.
+     * every other caller sees null and is a no-op.
      */
     private val track = AtomicReference<AudioTrack?>(null)
 
@@ -28,6 +28,13 @@ class AndroidAudioSink(
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
         )
+        if (minBufBytes == AudioTrack.ERROR ||
+            minBufBytes == AudioTrack.ERROR_BAD_VALUE ||
+            minBufBytes <= 0
+        ) {
+            Log.e(TAG, "getMinBufferSize failed: $minBufBytes sampleRate=$sampleRate")
+            throw IllegalStateException("AudioTrack getMinBufferSize failed: $minBufBytes")
+        }
         // Mono 16-bit: 2 bytes per frame.
         val minBufFrames = max(minBufBytes / 2, 1)
         val writeFrames = max(minBufFrames, preferredBufferFrames)
@@ -39,27 +46,42 @@ class AndroidAudioSink(
                 "minBufFrames=$minBufFrames preferredBufferFrames=$preferredBufferFrames " +
                 "writeFrames=$writeFrames trackBufferBytes=$trackBufferBytes",
         )
-        val local = AudioTrack.Builder()
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build(),
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setSampleRate(sampleRate)
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build(),
-            )
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .setBufferSizeInBytes(trackBufferBytes)
-            .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_NONE)
-            .build()
+        val local = try {
+            AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build(),
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setSampleRate(sampleRate)
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build(),
+                )
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .setBufferSizeInBytes(trackBufferBytes)
+                .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_NONE)
+                .build()
+        } catch (t: Throwable) {
+            Log.e(TAG, "AudioTrack.Builder.build failed", t)
+            throw t
+        }
+        // Do not publish into [track] until play succeeds — no half-built owner.
+        try {
+            local.setVolume(1f)
+            local.play()
+        } catch (t: Throwable) {
+            Log.e(TAG, "AudioTrack setVolume/play failed", t)
+            try {
+                local.release()
+            } catch (_: Exception) {
+            }
+            throw t
+        }
         track.set(local)
-        local.setVolume(1f)
-        local.play()
         return writeFrames
     }
 
@@ -207,6 +229,6 @@ class AndroidAudioSink(
     }
 
     companion object {
-        private const val TAG = "MetromAudio"
+        const val TAG = "MetromAudio"
     }
 }
