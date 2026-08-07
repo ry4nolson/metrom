@@ -1,0 +1,15 @@
+# Cloudflare Pages project for Metrom marketing site.
+#
+# Dashboard setup:
+# 1. Workers & Pages → Create → Connect to Git → ry4nolson/metrom
+# 2. Root directory: website
+# 3. Build command: (leave empty) or: echo ok
+# 4. Build output directory: /  (contents of website/)
+# 5. Custom domain: metrom.dev (already purchased) → attach to this Pages project
+# 6. Optional: Email Routing for support@metrom.dev → forward to your inbox
+#
+# Local preview: npx wrangler pages dev .  (from this directory)
+
+name = "metrom"
+compatibility_date = "2026-08-06"
+pages_build_output_dir = "."
