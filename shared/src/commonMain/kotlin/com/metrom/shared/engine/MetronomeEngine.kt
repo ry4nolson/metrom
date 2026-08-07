@@ -13,6 +13,7 @@ import com.metrom.shared.domain.TimeSignature
 import com.metrom.shared.platform.AudioSink
 import com.metrom.shared.platform.LatencyPad
 import com.metrom.shared.platform.UiClock
+import kotlin.concurrent.Volatile
 
 /**
  * Platform-agnostic metronome coordinator.
@@ -27,7 +28,7 @@ class MetronomeEngine(
 ) {
     val mixer = MetronomeMixer()
 
-    
+    @Volatile
     var playing: Boolean = false
         private set
 
