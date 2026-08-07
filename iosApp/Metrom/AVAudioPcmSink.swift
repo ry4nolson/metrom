@@ -297,7 +297,7 @@ final class IosEngineRunner: NSObject, EngineRunner {
 
     func isRunning(engine: MetronomeEngine) -> Bool {
         lock.lock(); defer { lock.unlock() }
-        return running
+        return running && engine.playing
     }
 
     /// Precondition: `lock` held. Waits for the audio thread with the lock held;
