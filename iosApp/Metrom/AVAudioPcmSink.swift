@@ -247,6 +247,9 @@ final class AVAudioPcmSink: NSObject, AudioSink {
 final class IosEngineRunner: NSObject, EngineRunner {
     private let sink: AVAudioPcmSink
     private var thread: Thread?
+    private var exitSemaphore: DispatchSemaphore?
+    /// True from spawn until stopLocked finishes waiting for runLoop to unwind.
+    private var running = false
     private let lock = NSLock()
 
     init(sink: AVAudioPcmSink) {
@@ -256,10 +259,14 @@ final class IosEngineRunner: NSObject, EngineRunner {
 
     func start(engine: MetronomeEngine) {
         lock.lock(); defer { lock.unlock() }
-        if thread?.isExecuting == true { return }
+        if running { return }
         stopLocked(engine: engine)
         engine.markPlaying()
+        let sem = DispatchSemaphore(value: 0)
+        exitSemaphore = sem
+        running = true
         let t = Thread {
+            defer { sem.signal() }
             engine.runLoop()
         }
         t.name = "metrom-audio"
@@ -285,12 +292,23 @@ final class IosEngineRunner: NSObject, EngineRunner {
     }
 
     func isRunning(engine: MetronomeEngine) -> Bool {
-        engine.playing && (thread?.isExecuting == true)
+        lock.lock(); defer { lock.unlock() }
+        return running
     }
 
+    /// Precondition: `lock` held. Waits for the audio thread with the lock held;
+    /// the thread body only signals `exitSemaphore` and does not take `lock`.
     private func stopLocked(engine: MetronomeEngine) {
         engine.markStopped()
+        if let sem = exitSemaphore {
+            let result = sem.wait(timeout: .now() + 2.0)
+            if result == .timedOut {
+                NSLog("Metrom: IosEngineRunner stopLocked wait timed out")
+            }
+        }
         thread = nil
+        exitSemaphore = nil
+        running = false
     }
 }
 
