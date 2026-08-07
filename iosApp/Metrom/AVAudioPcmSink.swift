@@ -257,9 +257,10 @@ final class IosEngineRunner: NSObject, EngineRunner {
         super.init()
     }
 
-    func start(engine: MetronomeEngine) {
+    /// Always succeeds today: iOS always spawns (or is already running). Signature-only for KMP Bool.
+    func start(engine: MetronomeEngine) -> Bool {
         lock.lock(); defer { lock.unlock() }
-        if running { return }
+        if running { return true }
         stopLocked(engine: engine)
         engine.markPlaying()
         let sem = DispatchSemaphore(value: 0)
@@ -273,11 +274,14 @@ final class IosEngineRunner: NSObject, EngineRunner {
         t.qualityOfService = .userInteractive
         thread = t
         t.start()
+        return true
     }
 
-    func stop(engine: MetronomeEngine) {
+    /// Always reports clean stop for now (iOS wait timeout does not leave a wedged session).
+    func stop(engine: MetronomeEngine) -> Bool {
         lock.lock(); defer { lock.unlock() }
         stopLocked(engine: engine)
+        return true
     }
 
     func dispose(engine: MetronomeEngine) {

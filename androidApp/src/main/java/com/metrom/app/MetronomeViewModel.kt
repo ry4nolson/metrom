@@ -100,6 +100,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
                         resumeAfterFocusGain = true
                         controller.pauseTransient()
                         unregisterBecomingNoisy()
+                        // Keep focusRequest while stalled/paused — system still owns the grant.
                     }
                 }
                 AudioManager.AUDIOFOCUS_GAIN -> {
@@ -129,14 +130,18 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         }
         PlaybackBridge.onToggle = { togglePlay() }
         PlaybackBridge.onStop = { stop() }
-        // Audio thread ended without a normal ViewModel.stop (start failure, write error).
-        runner.onSessionEnded = {
+        runner.onEngineFailed = {
             mainHandler.post {
-                if (!state.value.isPlaying) return@post
                 resumeAfterFocusGain = false
-                controller.stop()
+                controller.handleEngineFailed()
                 unregisterBecomingNoisy()
                 abandonAudioFocus()
+            }
+        }
+        runner.onWedgeCleared = {
+            mainHandler.post {
+                // Zombie released its track; safe to drop focus if UI already stopped.
+                if (!state.value.isPlaying) abandonAudioFocus()
             }
         }
     }
@@ -150,25 +155,23 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun start() {
-        if (!requestAudioFocus()) {
-            unregisterBecomingNoisy()
-            return
-        }
+        // Focus gating lives in canStart → controller lands "AUDIO BUSY" on deny.
         controller.start()
-        // Keep becoming-noisy registration matched to actual playback.
         if (state.value.isPlaying) {
             registerBecomingNoisy()
         } else {
             unregisterBecomingNoisy()
-            abandonAudioFocus()
+            // Keep focus while a WEDGED thread may still produce audio.
+            if (state.value.tapHint != "AUDIO STALLED") abandonAudioFocus()
         }
     }
 
     fun stop() {
         resumeAfterFocusGain = false
-        controller.stop()
+        val clean = controller.stop()
         unregisterBecomingNoisy()
-        abandonAudioFocus()
+        // Do not abandon focus while a WEDGED thread may still produce audio.
+        if (clean) abandonAudioFocus()
     }
 
     fun setBpm(bpm: Int, persist: Boolean = true) = controller.setBpm(bpm, persist)
@@ -259,8 +262,8 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         resumeAfterFocusGain = false
         mainHandler.removeCallbacksAndMessages(null)
         unregisterBecomingNoisy()
-        abandonAudioFocus()
         controller.dispose()
+        abandonAudioFocus()
         PlaybackBridge.playing = false
         PlaybackService.sync(getApplication())
         super.onCleared()

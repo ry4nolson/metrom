@@ -160,7 +160,7 @@ class MetronomeController(
             return
         }
         if (!canStart()) {
-            _state.update { it.copy(tapHint = "AUDIO BUSY") }
+            landStartFailure("AUDIO BUSY")
             return
         }
         lastBeatIndex = -1
@@ -174,22 +174,9 @@ class MetronomeController(
             prefs.putInt("trainerStartBpm", s.bpm)
         }
         applyBarGate(0)
-        runner.start(engine)
-        if (!runner.isRunning(engine)) {
-            // Start refused (wedged thread / join timeout) or died immediately.
-            lastBeatIndex = -1
-            barIndex = 0
-            _state.update {
-                it.copy(
-                    isPlaying = false,
-                    activeBeat = -1,
-                    sessionBar = 0,
-                    sessionPhase = SessionPhase.IDLE,
-                    statusLine = "READY",
-                    tapHint = "AUDIO FAILED",
-                )
-            }
-            publishPlayback()
+        if (!runner.start(engine)) {
+            // Rejected while WEDGED/STOPPING — same visible stall as a timed-out stop.
+            landStartFailure("AUDIO STALLED")
             return
         }
         _state.update {
@@ -203,13 +190,18 @@ class MetronomeController(
                     0,
                     if (it.countInBars > 0) SessionPhase.COUNT_IN else SessionPhase.PLAYING,
                 ),
+                tapHint = null,
             )
         }
         publishPlayback()
     }
 
-    fun stop() {
-        runner.stop(engine)
+    /**
+     * User / focus stop. Returns true if teardown completed (IDLE).
+     * Returns false if WEDGED — UI must not claim a clean stop; keep audio focus.
+     */
+    fun stop(): Boolean {
+        val clean = runner.stop(engine)
         lastBeatIndex = -1
         barIndex = 0
         _state.update {
@@ -219,17 +211,47 @@ class MetronomeController(
                 sessionBar = 0,
                 sessionPhase = SessionPhase.IDLE,
                 statusLine = "READY",
-                tapHint = null,
+                tapHint = if (clean) null else "AUDIO STALLED",
             )
         }
         publishPlayback()
+        return clean
     }
 
-    fun pauseTransient() {
-        runner.stop(engine)
+    fun pauseTransient(): Boolean {
+        val clean = runner.stop(engine)
         lastBeatIndex = -1
         _state.update {
-            it.copy(isPlaying = false, activeBeat = -1, statusLine = "PAUSED", tapHint = "AUDIO PAUSED")
+            it.copy(
+                isPlaying = false,
+                activeBeat = -1,
+                statusLine = if (clean) "PAUSED" else "READY",
+                tapHint = if (clean) "AUDIO PAUSED" else "AUDIO STALLED",
+            )
+        }
+        publishPlayback()
+        return clean
+    }
+
+    /** Async engine death (STARTING/RUNNING → FAILED). Lands not-playing with a visible hint. */
+    fun handleEngineFailed() {
+        lastBeatIndex = -1
+        barIndex = 0
+        landStartFailure("AUDIO FAILED")
+    }
+
+    private fun landStartFailure(hint: String) {
+        lastBeatIndex = -1
+        barIndex = 0
+        _state.update {
+            it.copy(
+                isPlaying = false,
+                activeBeat = -1,
+                sessionBar = 0,
+                sessionPhase = SessionPhase.IDLE,
+                statusLine = "READY",
+                tapHint = hint,
+            )
         }
         publishPlayback()
     }
@@ -712,7 +734,7 @@ class MetronomeController(
     private fun finishTrainer(targetBpm: Int) {
         val s = _state.value
         if (s.trainerAutoStop) {
-            runner.stop(engine)
+            val clean = runner.stop(engine)
             lastBeatIndex = -1
             barIndex = 0
             _state.update {
@@ -722,11 +744,11 @@ class MetronomeController(
                     sessionBar = 0,
                     sessionPhase = SessionPhase.IDLE,
                     statusLine = "TARGET · $targetBpm",
-                    tapHint = "TRAINER DONE · $targetBpm",
+                    tapHint = if (clean) "TRAINER DONE · $targetBpm" else "AUDIO STALLED",
                 )
             }
             publishPlayback()
-            onTrainerAutoStopped()
+            if (clean) onTrainerAutoStopped()
         } else {
             _state.update {
                 it.copy(

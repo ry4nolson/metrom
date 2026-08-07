@@ -7,6 +7,7 @@ import android.media.AudioTrack
 import android.util.Log
 import com.metrom.shared.platform.AudioRouteHint
 import com.metrom.shared.platform.AudioSink
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.max
 
@@ -14,14 +15,15 @@ class AndroidAudioSink(
     private val audioManager: AudioManager?,
 ) : AudioSink {
     /**
-     * Sole owner of the live [AudioTrack].
-     * Release takes ownership via [AtomicReference.getAndSet]; the winner releases,
-     * every other caller sees null and is a no-op.
+     * Sole owner of the live stream [AudioTrack].
+     * Release takes ownership via [AtomicReference.getAndSet]; exactly one caller wins.
      */
     private val track = AtomicReference<AudioTrack?>(null)
 
+    /** Fired on the audio thread after [start] successfully calls [AudioTrack.play]. */
+    @Volatile var onTrackStarted: (() -> Unit)? = null
+
     override fun start(sampleRate: Int, channelCount: Int, preferredBufferFrames: Int): Int {
-        // Fully release any prior track before building a new one (no orphans).
         releaseOwnedTrack()
         val minBufBytes = AudioTrack.getMinBufferSize(
             sampleRate,
@@ -35,10 +37,8 @@ class AndroidAudioSink(
             Log.e(TAG, "getMinBufferSize failed: $minBufBytes sampleRate=$sampleRate")
             throw IllegalStateException("AudioTrack getMinBufferSize failed: $minBufBytes")
         }
-        // Mono 16-bit: 2 bytes per frame.
         val minBufFrames = max(minBufBytes / 2, 1)
         val writeFrames = max(minBufFrames, preferredBufferFrames)
-        // ~200ms at writeFrames; never below the device minimum in bytes.
         val trackBufferBytes = max(minBufBytes, writeFrames * 2 * 2)
         Log.i(
             TAG,
@@ -69,7 +69,6 @@ class AndroidAudioSink(
             Log.e(TAG, "AudioTrack.Builder.build failed", t)
             throw t
         }
-        // Do not publish into [track] until play succeeds — no half-built owner.
         try {
             local.setVolume(1f)
             local.play()
@@ -82,6 +81,10 @@ class AndroidAudioSink(
             throw t
         }
         track.set(local)
+        try {
+            onTrackStarted?.invoke()
+        } catch (_: Exception) {
+        }
         return writeFrames
     }
 
@@ -105,10 +108,7 @@ class AndroidAudioSink(
         }
     }
 
-    /**
-     * Unblock a pending [write] (pause + flush). Keeps the [AudioTrack] reference valid.
-     * Does not release. Safe if the track is already gone.
-     */
+    /** Unblock write; leave handle valid. Does not release. */
     override fun stop() {
         val t = track.get() ?: return
         try {
@@ -121,18 +121,11 @@ class AndroidAudioSink(
         }
     }
 
-    /**
-     * Unblock if needed, then release. Only the [AtomicReference.getAndSet] winner
-     * performs native release; concurrent callers are no-ops.
-     */
+    /** Only release path. Idempotent via getAndSet. */
     override fun dispose() {
         releaseOwnedTrack()
     }
 
-    /**
-     * Claim the current track (or nothing) and release it.
-     * `getAndSet(null)` is the ownership handoff: exactly one caller wins.
-     */
     private fun releaseOwnedTrack() {
         val t = track.getAndSet(null) ?: return
         try {
@@ -173,9 +166,13 @@ class AndroidAudioSink(
         }
     }
 
-    fun previewStatic(pcm: ShortArray, volume: Float) {
+    /**
+     * One-shot static preview. [cancelled] is polled so [dispose] can abort the sleep.
+     */
+    fun previewStatic(pcm: ShortArray, volume: Float, cancelled: AtomicBoolean) {
         var preview: AudioTrack? = null
         try {
+            if (cancelled.get()) return
             val bytes = pcm.size * 2
             preview = AudioTrack.Builder()
                 .setAudioAttributes(
@@ -196,8 +193,14 @@ class AndroidAudioSink(
                 .build()
             preview.setVolume(volume.coerceIn(0.2f, 1f))
             preview.write(pcm, 0, pcm.size)
+            if (cancelled.get()) return
             preview.play()
-            Thread.sleep((pcm.size * 1000L / 44_100L) + 40L)
+            var remaining = (pcm.size * 1000L / 44_100L) + 40L
+            while (remaining > 0 && !cancelled.get()) {
+                val slice = minOf(remaining, 50L)
+                Thread.sleep(slice)
+                remaining -= slice
+            }
         } catch (_: Exception) {
         } finally {
             try {
@@ -229,6 +232,6 @@ class AndroidAudioSink(
     }
 
     companion object {
-        const val TAG = "MetromAudio"
+        private const val TAG = "MetromAudio"
     }
 }
