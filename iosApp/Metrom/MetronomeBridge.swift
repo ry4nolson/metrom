@@ -288,7 +288,14 @@ final class MetronomeBridge: ObservableObject {
         // 4 Hz backstop for non-beat state (songs, trainer, detect). Beat flash is pushed
         // immediately from engine.onBeat on the main queue.
         let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
-            self?.refreshFromState()
+            guard let self else { return }
+            // Surface async engine death (write stall / session failure) that left UI playing.
+            if let s = self.controller.state.value as? MetronomeUiState,
+               s.isPlaying,
+               !self.runner.isRunning(engine: self.engine) {
+                self.controller.handleEngineFailed()
+            }
+            self.refreshFromState()
         }
         RunLoop.main.add(timer, forMode: .common)
         pollTimer = timer

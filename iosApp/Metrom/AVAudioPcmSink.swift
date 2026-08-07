@@ -257,11 +257,14 @@ final class IosEngineRunner: NSObject, EngineRunner {
         super.init()
     }
 
-    /// Always succeeds today: iOS always spawns (or is already running). Signature-only for KMP Bool.
     func start(engine: MetronomeEngine) -> Bool {
         lock.lock(); defer { lock.unlock() }
-        if running { return true }
-        stopLocked(engine: engine)
+        // Inline isRunning predicate — do not call isRunning (NSLock is not recursive).
+        if running && engine.playing { return true }
+        if !stopLocked(engine: engine) {
+            // Join timed out: thread still owns the session. Refuse to spawn over it.
+            return false
+        }
         engine.markPlaying()
         let sem = DispatchSemaphore(value: 0)
         exitSemaphore = sem
@@ -277,16 +280,14 @@ final class IosEngineRunner: NSObject, EngineRunner {
         return true
     }
 
-    /// Always reports clean stop for now (iOS wait timeout does not leave a wedged session).
     func stop(engine: MetronomeEngine) -> Bool {
         lock.lock(); defer { lock.unlock() }
-        stopLocked(engine: engine)
-        return true
+        return stopLocked(engine: engine)
     }
 
     func dispose(engine: MetronomeEngine) {
         lock.lock(); defer { lock.unlock() }
-        stopLocked(engine: engine)
+        _ = stopLocked(engine: engine)
         sink.dispose()
     }
 
@@ -302,17 +303,22 @@ final class IosEngineRunner: NSObject, EngineRunner {
 
     /// Precondition: `lock` held. Waits for the audio thread with the lock held;
     /// the thread body only signals `exitSemaphore` and does not take `lock`.
-    private func stopLocked(engine: MetronomeEngine) {
+    /// - Returns: `true` if idle (joined or nothing to join); `false` on join timeout
+    ///   (leaves `thread` / `exitSemaphore` / `running` in place for a later retry).
+    @discardableResult
+    private func stopLocked(engine: MetronomeEngine) -> Bool {
         engine.markStopped()
         if let sem = exitSemaphore {
             let result = sem.wait(timeout: .now() + 2.0)
             if result == .timedOut {
                 NSLog("Metrom: IosEngineRunner stopLocked wait timed out")
+                return false
             }
         }
         thread = nil
         exitSemaphore = nil
         running = false
+        return true
     }
 }
 
