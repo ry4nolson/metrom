@@ -3,29 +3,29 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 46;
+	objectVersion = 54;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		098111E45696847AAE106A97 /* AVAudioPcmSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75A11533E9A1E82510F75AE5 /* AVAudioPcmSink.swift */; };
-		84A2195500B763947655BE09 /* MetromApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AB6E447D7A93C703EE1904C /* MetromApp.swift */; };
-		8DE7B0E93AB777C847492C6B /* MetromTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40A9450F0A2EA134D10820E6 /* MetromTheme.swift */; };
-		8F0231A67C4976C83C5C4597 /* tones in Resources */ = {isa = PBXBuildFile; fileRef = 428377E4250AD4BCD0FF3E6F /* tones */; };
-		ADFA8730F817662AC8394EF4 /* MetromShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 285A6E42B10E679D729030F4 /* MetromShared.framework */; };
-		BC067A54953E881EC3705A71 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DFE0A7D86E3817B3AEA2BDC2 /* Foundation.framework */; };
-		C58C6D466A8B45F171110500 /* MetronomeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3CD6A0157CEB1585511FE8 /* MetronomeBridge.swift */; };
-		F1FEA414976D49F8F8394EB0 /* MetromShared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 285A6E42B10E679D729030F4 /* MetromShared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		F4DC006C304E520F6F086A27 /* MetronomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41B2384BCE30ABDED494761E /* MetronomeView.swift */; };
+		26DF6507351EF555422E6F16 /* MetronomeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3852A8C0AF9478756E0374A /* MetronomeBridge.swift */; };
+		6E0FDBE888009FDF57F1128F /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F4FFC503E5AF05FE43DCC1E8 /* Foundation.framework */; };
+		80ECB962ABC36D3B3B69B50D /* tones in Resources */ = {isa = PBXBuildFile; fileRef = 844EEEE21063F64C22212C4F /* tones */; };
+		85EB688553E33C553D372957 /* MetronomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C0C8E2674C25222DC7C724E /* MetronomeView.swift */; };
+		9FD97F739E1E11E15780F26D /* MetromShared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6E25FF8BC1B984B06B1B2C70 /* MetromShared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		CAFE8FC3E073001E8190CD92 /* MetromTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A446230582348B9F156CE2D7 /* MetromTheme.swift */; };
+		E12A47B231EB13E1A9554152 /* MetromShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6E25FF8BC1B984B06B1B2C70 /* MetromShared.framework */; };
+		F89578DABD7EBBD8CCF46A21 /* AVAudioPcmSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392B83B1D5190F5BA4D56C30 /* AVAudioPcmSink.swift */; };
+		FB85AD0695ECA8E2A9F4250F /* MetromApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 374A210C21B7324C81DCF46E /* MetromApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		6105A7FC7E87D4CDE680B42C /* Embed Frameworks */ = {
+		AF635F6408781E83A29DD928 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				F1FEA414976D49F8F8394EB0 /* MetromShared.framework in Embed Frameworks */,
+				9FD97F739E1E11E15780F26D /* MetromShared.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -33,92 +33,91 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		285A6E42B10E679D729030F4 /* MetromShared.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetromShared.framework; path = ../shared/build/bin/iosSimulatorArm64/debugFramework/MetromShared.framework; sourceTree = "<group>"; };
-		40A9450F0A2EA134D10820E6 /* MetromTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetromTheme.swift; sourceTree = "<group>"; };
-		41B2384BCE30ABDED494761E /* MetronomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetronomeView.swift; sourceTree = "<group>"; };
-		428377E4250AD4BCD0FF3E6F /* tones */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = folder; name = tones; path = Resources/tones; sourceTree = "<group>"; };
-		6B4395FB5DA8D3766E2DA71A /* Metrom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Metrom.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		75A11533E9A1E82510F75AE5 /* AVAudioPcmSink.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AVAudioPcmSink.swift; sourceTree = "<group>"; };
-		8AB6E447D7A93C703EE1904C /* MetromApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetromApp.swift; sourceTree = "<group>"; };
-		B012334FCDCB539A864C8623 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		DFE0A7D86E3817B3AEA2BDC2 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		FC3CD6A0157CEB1585511FE8 /* MetronomeBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetronomeBridge.swift; sourceTree = "<group>"; };
+		0838C71DE12B276CD8B45167 /* Metrom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Metrom.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		374A210C21B7324C81DCF46E /* MetromApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetromApp.swift; sourceTree = "<group>"; };
+		392B83B1D5190F5BA4D56C30 /* AVAudioPcmSink.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AVAudioPcmSink.swift; sourceTree = "<group>"; };
+		6E25FF8BC1B984B06B1B2C70 /* MetromShared.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetromShared.framework; path = ../shared/build/bin/iosSimulatorArm64/debugFramework/MetromShared.framework; sourceTree = "<group>"; };
+		844EEEE21063F64C22212C4F /* tones */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = folder; name = tones; path = Resources/tones; sourceTree = "<group>"; };
+		8C0C8E2674C25222DC7C724E /* MetronomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetronomeView.swift; sourceTree = "<group>"; };
+		A3852A8C0AF9478756E0374A /* MetronomeBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetronomeBridge.swift; sourceTree = "<group>"; };
+		A446230582348B9F156CE2D7 /* MetromTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetromTheme.swift; sourceTree = "<group>"; };
+		F4FFC503E5AF05FE43DCC1E8 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		FD35A96FF874CB47610F5F3E /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		2DEEE8CBDA1D64104E9C30EB /* Frameworks */ = {
+		97AE2994C468998CA9648B79 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BC067A54953E881EC3705A71 /* Foundation.framework in Frameworks */,
-				ADFA8730F817662AC8394EF4 /* MetromShared.framework in Frameworks */,
+				6E0FDBE888009FDF57F1128F /* Foundation.framework in Frameworks */,
+				E12A47B231EB13E1A9554152 /* MetromShared.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		1C3E873E9CEDEE5E50A99A01 /* Frameworks */ = {
+		072E57572D90EAA013788B70 /* Metrom */ = {
 			isa = PBXGroup;
 			children = (
-				BE5DEF6BF3E999D2CBFF3ED5 /* iOS */,
+				392B83B1D5190F5BA4D56C30 /* AVAudioPcmSink.swift */,
+				374A210C21B7324C81DCF46E /* MetromApp.swift */,
+				A446230582348B9F156CE2D7 /* MetromTheme.swift */,
+				A3852A8C0AF9478756E0374A /* MetronomeBridge.swift */,
+				8C0C8E2674C25222DC7C724E /* MetronomeView.swift */,
+				844EEEE21063F64C22212C4F /* tones */,
+				FD35A96FF874CB47610F5F3E /* Info.plist */,
 			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		87A96194999E3DD2EA499873 /* Metrom */ = {
-			isa = PBXGroup;
-			children = (
-				75A11533E9A1E82510F75AE5 /* AVAudioPcmSink.swift */,
-				8AB6E447D7A93C703EE1904C /* MetromApp.swift */,
-				40A9450F0A2EA134D10820E6 /* MetromTheme.swift */,
-				FC3CD6A0157CEB1585511FE8 /* MetronomeBridge.swift */,
-				41B2384BCE30ABDED494761E /* MetronomeView.swift */,
-				428377E4250AD4BCD0FF3E6F /* tones */,
-				B012334FCDCB539A864C8623 /* Info.plist */,
-			);
-			name = Metrom;
 			path = Metrom;
 			sourceTree = "<group>";
 		};
-		AECF48AA57D403CEE93356EF = {
+		2ED2B3A21A69C095D00B86DE = {
 			isa = PBXGroup;
 			children = (
-				BC30DEFCAA0B6DB7000A4800 /* Products */,
-				1C3E873E9CEDEE5E50A99A01 /* Frameworks */,
-				87A96194999E3DD2EA499873 /* Metrom */,
-				285A6E42B10E679D729030F4 /* MetromShared.framework */,
+				5D9427C9888A3E90A1F79CAA /* Products */,
+				D01C412731FDCB4DB41A0FBE /* Frameworks */,
+				072E57572D90EAA013788B70 /* Metrom */,
+				6E25FF8BC1B984B06B1B2C70 /* MetromShared.framework */,
 			);
 			sourceTree = "<group>";
 		};
-		BC30DEFCAA0B6DB7000A4800 /* Products */ = {
+		5D9427C9888A3E90A1F79CAA /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				6B4395FB5DA8D3766E2DA71A /* Metrom.app */,
+				0838C71DE12B276CD8B45167 /* Metrom.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		BE5DEF6BF3E999D2CBFF3ED5 /* iOS */ = {
+		866D7B3798CA1839A510D204 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
-				DFE0A7D86E3817B3AEA2BDC2 /* Foundation.framework */,
+				F4FFC503E5AF05FE43DCC1E8 /* Foundation.framework */,
 			);
 			name = iOS;
+			sourceTree = "<group>";
+		};
+		D01C412731FDCB4DB41A0FBE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				866D7B3798CA1839A510D204 /* iOS */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		1F8909629BDE813348FA774E /* Metrom */ = {
+		D8042BD34E87C4F4A408A459 /* Metrom */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 5DA4804594D3553566769422 /* Build configuration list for PBXNativeTarget "Metrom" */;
+			buildConfigurationList = A491007DB449D1309F1A6A3D /* Build configuration list for PBXNativeTarget "Metrom" */;
 			buildPhases = (
-				AC18DF396E5807D4943B7F59 /* Compile MetromShared */,
-				8D0482188F50B773EB25DD82 /* Sources */,
-				2DEEE8CBDA1D64104E9C30EB /* Frameworks */,
-				5385ACC509CA73F2164D41F4 /* Resources */,
-				6105A7FC7E87D4CDE680B42C /* Embed Frameworks */,
+				BE5D2712744C8C1368C3E3A4 /* Compile MetromShared */,
+				97E3206F2E9CC66593C0EE70 /* Sources */,
+				97AE2994C468998CA9648B79 /* Frameworks */,
+				DB37A50068E42E7DCD32498A /* Resources */,
+				AF635F6408781E83A29DD928 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -126,19 +125,20 @@
 			);
 			name = Metrom;
 			productName = Metrom;
-			productReference = 6B4395FB5DA8D3766E2DA71A /* Metrom.app */;
+			productReference = 0838C71DE12B276CD8B45167 /* Metrom.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		EFDFF9AAD0FEF403E571EE11 /* Project object */ = {
+		BB5F841AB1633A304455F691 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
+				BuildIndependentTargetsInParallel = YES;
 				LastSwiftUpdateCheck = 1100;
-				LastUpgradeCheck = 1100;
+				LastUpgradeCheck = 1640;
 			};
-			buildConfigurationList = 6976B4FF5F0077F18D4DEF29 /* Build configuration list for PBXProject "Metrom" */;
+			buildConfigurationList = 9F7FC67BE536B352C613ACD4 /* Build configuration list for PBXProject "Metrom" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -146,29 +146,29 @@
 				en,
 				Base,
 			);
-			mainGroup = AECF48AA57D403CEE93356EF;
-			productRefGroup = BC30DEFCAA0B6DB7000A4800 /* Products */;
+			mainGroup = 2ED2B3A21A69C095D00B86DE;
+			productRefGroup = 5D9427C9888A3E90A1F79CAA /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				1F8909629BDE813348FA774E /* Metrom */,
+				D8042BD34E87C4F4A408A459 /* Metrom */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		5385ACC509CA73F2164D41F4 /* Resources */ = {
+		DB37A50068E42E7DCD32498A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8F0231A67C4976C83C5C4597 /* tones in Resources */,
+				80ECB962ABC36D3B3B69B50D /* tones in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		AC18DF396E5807D4943B7F59 /* Compile MetromShared */ = {
+		BE5D2712744C8C1368C3E3A4 /* Compile MetromShared */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -190,161 +190,22 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		8D0482188F50B773EB25DD82 /* Sources */ = {
+		97E3206F2E9CC66593C0EE70 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				098111E45696847AAE106A97 /* AVAudioPcmSink.swift in Sources */,
-				84A2195500B763947655BE09 /* MetromApp.swift in Sources */,
-				8DE7B0E93AB777C847492C6B /* MetromTheme.swift in Sources */,
-				C58C6D466A8B45F171110500 /* MetronomeBridge.swift in Sources */,
-				F4DC006C304E520F6F086A27 /* MetronomeView.swift in Sources */,
+				F89578DABD7EBBD8CCF46A21 /* AVAudioPcmSink.swift in Sources */,
+				FB85AD0695ECA8E2A9F4250F /* MetromApp.swift in Sources */,
+				CAFE8FC3E073001E8190CD92 /* MetromTheme.swift in Sources */,
+				26DF6507351EF555422E6F16 /* MetronomeBridge.swift in Sources */,
+				85EB688553E33C553D372957 /* MetronomeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		45E5D4F49C90B78E3358BABD /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				ENABLE_DEBUG_DYLIB = NO;
-				ENABLE_PREVIEWS = NO;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"\"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)\"",
-					"\"$(SRCROOT)/../shared/build/bin/iosSimulatorArm64/debugFramework\"",
-					"\"$(SRCROOT)/../shared/build/bin/iosArm64/debugFramework\"",
-				);
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Metrom/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-framework",
-					MetromShared,
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.metrom.app;
-				PRODUCT_NAME = Metrom;
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Debug;
-		};
-		A83904D8BFAD8E3DAFB334B0 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				ENABLE_DEBUG_DYLIB = NO;
-				ENABLE_PREVIEWS = NO;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"\"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)\"",
-					"\"$(SRCROOT)/../shared/build/bin/iosSimulatorArm64/debugFramework\"",
-					"\"$(SRCROOT)/../shared/build/bin/iosArm64/debugFramework\"",
-				);
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Metrom/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-framework",
-					MetromShared,
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.metrom.app;
-				PRODUCT_NAME = Metrom;
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		C321236ADA7D1C628D2900AC /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_TESTABILITY = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		E650EB449D9C7AD9A81B61AD /* Release */ = {
+		461DCB46385AA22008F863F6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -379,8 +240,10 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = M3C8F32WA5;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -400,28 +263,184 @@
 			};
 			name = Release;
 		};
+		665993829C0C851C6FB19D65 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_DEBUG_DYLIB = NO;
+				ENABLE_PREVIEWS = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)\"",
+					"\"$(SRCROOT)/../shared/build/bin/iosSimulatorArm64/debugFramework\"",
+					"\"$(SRCROOT)/../shared/build/bin/iosArm64/debugFramework\"",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Metrom/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					MetromShared,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.metrom.app;
+				PRODUCT_NAME = Metrom;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A5F6277F9867E4E1F34D7AA1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = M3C8F32WA5;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		DD4D4FB910C8B0C2C4647A70 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_DEBUG_DYLIB = NO;
+				ENABLE_PREVIEWS = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)\"",
+					"\"$(SRCROOT)/../shared/build/bin/iosSimulatorArm64/debugFramework\"",
+					"\"$(SRCROOT)/../shared/build/bin/iosArm64/debugFramework\"",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Metrom/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					MetromShared,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.metrom.app;
+				PRODUCT_NAME = Metrom;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		5DA4804594D3553566769422 /* Build configuration list for PBXNativeTarget "Metrom" */ = {
+		9F7FC67BE536B352C613ACD4 /* Build configuration list for PBXProject "Metrom" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				A83904D8BFAD8E3DAFB334B0 /* Release */,
-				45E5D4F49C90B78E3358BABD /* Debug */,
+				A5F6277F9867E4E1F34D7AA1 /* Debug */,
+				461DCB46385AA22008F863F6 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		6976B4FF5F0077F18D4DEF29 /* Build configuration list for PBXProject "Metrom" */ = {
+		A491007DB449D1309F1A6A3D /* Build configuration list for PBXNativeTarget "Metrom" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				C321236ADA7D1C628D2900AC /* Debug */,
-				E650EB449D9C7AD9A81B61AD /* Release */,
+				DD4D4FB910C8B0C2C4647A70 /* Release */,
+				665993829C0C851C6FB19D65 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = EFDFF9AAD0FEF403E571EE11 /* Project object */;
+	rootObject = BB5F841AB1633A304455F691 /* Project object */;
 }

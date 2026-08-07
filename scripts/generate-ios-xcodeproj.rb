@@ -68,7 +68,8 @@ shared_settings = {
   'IPHONEOS_DEPLOYMENT_TARGET' => '16.0',
   'SDKROOT' => 'iphoneos',
   'CODE_SIGN_STYLE' => 'Automatic',
-  'DEVELOPMENT_TEAM' => '',
+  'DEVELOPMENT_TEAM' => 'M3C8F32WA5',
+  'CODE_SIGN_IDENTITY' => 'Apple Development',
   'FRAMEWORK_SEARCH_PATHS' => '$(inherited) "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)" "$(SRCROOT)/../shared/build/bin/iosSimulatorArm64/debugFramework" "$(SRCROOT)/../shared/build/bin/iosArm64/debugFramework"',
   'OTHER_LDFLAGS' => '$(inherited) -framework MetromShared',
   'ENABLE_PREVIEWS' => 'NO',
@@ -82,9 +83,6 @@ shared_settings = {
 
 target.build_configurations.each do |config|
   shared_settings.each { |k, v| config.build_settings[k] = v }
-  if config.name == 'Debug'
-    config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
-  end
 end
 
 # Embed MetromShared.framework into the app bundle for runtime loading
