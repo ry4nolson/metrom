@@ -61,19 +61,20 @@ class AndroidEngineRunner(
 
             engine.markPlaying()
             val generation = sessionGeneration.incrementAndGet()
+            val sessionEngine = engine
             val thread = Thread({
                 val self = Thread.currentThread()
                 var engineFailed = false
                 try {
                     Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
                     try {
-                        engine.runLoop()
+                        sessionEngine.runLoop()
                     } catch (t: Throwable) {
                         engineFailed = true
                         Log.e(AndroidAudioSink.TAG, "audio thread failed", t)
                     }
                 } finally {
-                    teardownAudioThread(self, generation, engineFailed)
+                    teardownAudioThread(sessionEngine, self, generation, engineFailed)
                 }
             }, "metrom-audio")
             audioThread = thread
@@ -123,7 +124,12 @@ class AndroidEngineRunner(
      * [userStopGeneration] in [stopLocked] before join, so the finally suppresses it.
      * Generation equality blocks notify against a newer session.
      */
-    private fun teardownAudioThread(self: Thread, generation: Int, engineFailed: Boolean) {
+    private fun teardownAudioThread(
+        sessionEngine: MetronomeEngine,
+        self: Thread,
+        generation: Int,
+        engineFailed: Boolean,
+    ) {
         val userStopped = userStopGeneration == generation
         val stillCurrent = audioThread === self
         val wasWedged = wedgedThread === self
@@ -134,7 +140,7 @@ class AndroidEngineRunner(
         }
 
         if (stillCurrent) {
-            engine.markStopped()
+            sessionEngine.markStopped()
             try {
                 sink.dispose()
             } catch (_: Exception) {

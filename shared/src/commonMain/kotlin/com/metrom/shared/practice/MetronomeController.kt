@@ -48,7 +48,7 @@ data class MetronomeUiState(
     val beatAtMs: Long = 0L,
     val isAccentBeat: Boolean = false,
     val tapHint: String? = null,
-    val countInBars: Int = 1,
+    val countInBars: Int = 0,
     val mutePattern: MutePattern = MutePattern.OFF,
     val trainerEnabled: Boolean = false,
     val trainerStartBpm: Int = 80,
@@ -796,7 +796,7 @@ class MetronomeController(
             groupTempo = prefs.getBoolean("groupTempo", false) && noteValue == 8 && beats % 3 == 0,
             timeSignature = TimeSignature(beats, noteValue),
             beatAccents = BeatAccent.decode(prefs.getString("beatAccents"), beats, noteValue),
-            countInBars = prefs.getInt("countInBars", 1),
+            countInBars = prefs.getInt("countInBars", 0),
             mutePattern = MutePattern(
                 playBars = prefs.getInt("mutePlayBars", 1),
                 silentBars = prefs.getInt("muteSilentBars", 0),
