@@ -33,6 +33,16 @@ captures/
 keystore.properties
 *.jks
 *.keystore
+*.p12
+*.p8
+*.pem
+*.mobileprovision
+AuthKey_*.p8
+google-services.json
+GoogleService-Info.plist
+.env
+.env.*
+!.env.example
 
 # Profiling / crash dumps
 *.hprof

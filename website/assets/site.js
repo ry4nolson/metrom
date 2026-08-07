@@ -29,6 +29,20 @@
     document.querySelectorAll("[data-year]").forEach(function (el) {
       el.textContent = String(new Date().getFullYear());
     });
+
+    var repoUrl = cfg.repoUrl || "https://github.com/ry4nolson/metrom";
+    document.querySelectorAll("[data-repo]").forEach(function (el) {
+      if (el.tagName === "A") {
+        el.href = repoUrl;
+        el.target = "_blank";
+        el.rel = "noopener noreferrer";
+        if (el.getAttribute("data-repo") === "fill") {
+          el.textContent = repoUrl.replace(/^https?:\/\//, "");
+        }
+      } else {
+        el.textContent = repoUrl;
+      }
+    });
   }
 
   function initHeader() {
