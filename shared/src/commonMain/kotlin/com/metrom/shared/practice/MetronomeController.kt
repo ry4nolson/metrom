@@ -176,7 +176,7 @@ class MetronomeController(
         applyBarGate(0)
         runner.start(engine)
         if (!runner.isRunning(engine)) {
-            // Start refused (e.g. previous audio thread join timed out) or died immediately.
+            // Start refused (wedged thread / join timeout) or died immediately.
             lastBeatIndex = -1
             barIndex = 0
             _state.update {

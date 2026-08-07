@@ -11,54 +11,69 @@ class AndroidEngineRunner(
 ) : EngineRunner {
     private val lifecycleLock = Any()
     private val previewGeneration = AtomicInteger(0)
+    private val sessionGeneration = AtomicInteger(0)
 
-    /** Set by the ViewModel to sync UI when the audio thread ends without a normal stop. */
+    /**
+     * Invoked only when a session ends because the engine failed (start threw, write
+     * error), not when the user requested stop. Never invoked for a newer session
+     * than the one that failed (generation check at the source).
+     */
     @Volatile var onSessionEnded: (() -> Unit)? = null
 
     @Volatile private var audioThread: Thread? = null
 
+    /** Non-null while a prior join timed out and that thread has not exited yet. */
+    @Volatile private var wedgedThread: Thread? = null
+
+    /**
+     * Session generation for which user/stopLocked requested stop.
+     * Compared in the audio-thread finally so [onSessionEnded] fires only for
+     * engine failures, not user-initiated teardown.
+     */
+    @Volatile private var userStopGeneration: Int = -1
+
     override fun start(engine: MetronomeEngine) {
         synchronized(lifecycleLock) {
             if (engine.playing && audioThread?.isAlive == true) return
+
+            val wedged = wedgedThread
+            if (wedged != null) {
+                if (wedged.isAlive) {
+                    // Fail fast: do not re-join a known-wedged thread (would freeze main ~3s).
+                    Log.e(
+                        AndroidAudioSink.TAG,
+                        "refusing start: wedged audio thread still alive (fail fast, no join)",
+                    )
+                    return
+                }
+                Log.i(AndroidAudioSink.TAG, "wedged audio thread exited; clearing wedge")
+                wedgedThread = null
+                if (audioThread === wedged) audioThread = null
+            }
+
             if (!stopLocked(engine)) {
-                // Join timed out: zombie still owns the session. Do not spawn over it.
                 Log.e(
                     AndroidAudioSink.TAG,
-                    "refusing start: previous audio thread still alive after join timeout",
+                    "refusing start: join timed out; thread marked wedged",
                 )
                 return
             }
+
             engine.markPlaying()
+            val generation = sessionGeneration.incrementAndGet()
             val thread = Thread({
                 val self = Thread.currentThread()
+                var engineFailed = false
                 try {
                     Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
                     try {
                         engine.runLoop()
                     } catch (t: Throwable) {
-                        // Includes failures from sink.start() before runLoop's try.
+                        engineFailed = true
                         Log.e(AndroidAudioSink.TAG, "audio thread failed", t)
                     }
                 } finally {
-                    // Only the current session thread may tear down. A timed-out
-                    // predecessor must not markStopped/dispose a newer session.
-                    if (audioThread !== self) {
-                        Log.w(
-                            AndroidAudioSink.TAG,
-                            "stale audio thread exiting; skipping teardown",
-                        )
-                        return@Thread
-                    }
-                    engine.markStopped()
-                    try {
-                        sink.dispose()
-                    } catch (_: Exception) {
-                    }
-                    if (audioThread === self) audioThread = null
-                    try {
-                        onSessionEnded?.invoke()
-                    } catch (_: Exception) {
-                    }
+                    teardownAudioThread(self, generation, engineFailed)
                 }
             }, "metrom-audio")
             audioThread = thread
@@ -93,15 +108,69 @@ class AndroidEngineRunner(
         engine.playing && audioThread?.isAlive == true
 
     /**
-     * Teardown order: mark stopped → unblock write → join audio thread → release track.
+     * Finally / ownership guard for a session thread.
+     *
+     * ```
+     * stillCurrent = (audioThread === self)
+     * wasWedged    = (wedgedThread === self)
+     * userStopped  = (userStopGeneration == generation)
+     * if (wasWedged) wedgedThread = null          // recover
+     * if (stillCurrent) { markStopped; dispose; audioThread = null }
+     * notify = !userStopped && sessionGeneration == generation && (engineFailed || stillCurrent)
+     * ```
+     *
+     * [onSessionEnded] is an engine-failure event only. User stop sets
+     * [userStopGeneration] in [stopLocked] before join, so the finally suppresses it.
+     * Generation equality blocks notify against a newer session.
+     */
+    private fun teardownAudioThread(self: Thread, generation: Int, engineFailed: Boolean) {
+        val userStopped = userStopGeneration == generation
+        val stillCurrent = audioThread === self
+        val wasWedged = wedgedThread === self
+
+        if (wasWedged) {
+            wedgedThread = null
+            Log.i(AndroidAudioSink.TAG, "wedged audio thread exited; wedge cleared")
+        }
+
+        if (stillCurrent) {
+            engine.markStopped()
+            try {
+                sink.dispose()
+            } catch (_: Exception) {
+            }
+            if (audioThread === self) audioThread = null
+        } else if (!wasWedged) {
+            Log.w(
+                AndroidAudioSink.TAG,
+                "audio thread exiting but not current; skipping sink dispose",
+            )
+        }
+
+        // Engine failure / unexpected exit only — not user-requested stop.
+        // stillCurrent was sampled before we nulled audioThread above.
+        val notifyFailure =
+            !userStopped &&
+                sessionGeneration.get() == generation &&
+                (engineFailed || stillCurrent)
+
+        if (notifyFailure) {
+            try {
+                onSessionEnded?.invoke()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /**
+     * Teardown order: mark stopped → unblock write → join → release (if joined).
      * Join stays bounded (1500ms + one retry).
      *
      * @return false if the audio thread is still alive after the bounded join.
-     *         Caller must not spawn a replacement session. The live thread remains
-     *         [audioThread] so its finally can dispose when it eventually exits;
-     *         main does not release while write may still be in flight.
      */
     private fun stopLocked(engine: MetronomeEngine): Boolean {
+        val gen = sessionGeneration.get()
+        userStopGeneration = gen
         engine.markStopped()
         try {
             sink.stop()
@@ -114,6 +183,11 @@ class AndroidEngineRunner(
             } catch (_: Exception) {
             }
             return true
+        }
+        // Already wedged: do not spend another 3s on main.
+        if (wedgedThread === thread && thread.isAlive) {
+            Log.e(AndroidAudioSink.TAG, "stopLocked: thread already wedged; skip re-join")
+            return false
         }
         try {
             thread.join(1_500L)
@@ -128,11 +202,11 @@ class AndroidEngineRunner(
             }
         }
         if (thread.isAlive) {
+            wedgedThread = thread
             Log.e(
                 AndroidAudioSink.TAG,
-                "audio join timed out; thread left as owner until it exits (no main-thread release)",
+                "audio join timed out; thread marked wedged (no main-thread release)",
             )
-            // Keep audioThread == thread so its finally is not "stale".
             return false
         }
         if (audioThread === thread) audioThread = null

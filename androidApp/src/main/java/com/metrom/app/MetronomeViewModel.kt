@@ -85,8 +85,14 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         mainHandler.post {
             when (change) {
                 AudioManager.AUDIOFOCUS_LOSS -> {
+                    // Permanent loss: clear focusRequest even if not playing, so the
+                    // idempotent requestAudioFocus() does not falsely report a hold.
                     resumeAfterFocusGain = false
-                    if (state.value.isPlaying) stop()
+                    if (state.value.isPlaying) {
+                        stop()
+                    } else {
+                        abandonAudioFocus()
+                    }
                 }
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
