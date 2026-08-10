@@ -90,9 +90,12 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import android.content.res.Configuration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
@@ -137,6 +140,9 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val detectState by viewModel.detectState.collectAsStateWithLifecycle()
     val detectDebug by viewModel.detectDebug.collectAsStateWithLifecycle()
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val horizontalPad = if (isLandscape) 20.dp else 24.dp
 
     Box(
         modifier = Modifier
@@ -159,35 +165,125 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                TopBar(state, viewModel)
-                Spacer(modifier = Modifier.height(10.dp))
-                BeatRail(
+            if (isLandscape) {
+                LandscapeBody(
                     state = state,
-                    onCycle = viewModel::cycleBeatAccent,
-                    onReset = viewModel::resetBeatAccents
+                    detectState = detectState,
+                    detectDebug = detectDebug,
+                    viewModel = viewModel,
+                    horizontalPad = horizontalPad,
+                    modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = "tap beats · strong / normal / mute",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Ash,
-                    modifier = Modifier
-                        .padding(top = 6.dp)
-                        .height(16.dp),
-                    maxLines = 1
+            } else {
+                PortraitBody(
+                    state = state,
+                    detectState = detectState,
+                    detectDebug = detectDebug,
+                    viewModel = viewModel,
+                    horizontalPad = horizontalPad,
+                    modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                PhaseBanner(state)
+            }
+
+            TransportDock(
+                state = state,
+                viewModel = viewModel,
+                landscape = isLandscape,
+                horizontalPad = horizontalPad
+            )
+        }
+    }
+}
+
+@Composable
+private fun PortraitBody(
+    state: MetronomeUiState,
+    detectState: DetectState,
+    detectDebug: DetectDebug?,
+    viewModel: MetronomeViewModel,
+    horizontalPad: Dp,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPad)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        TopBar(state, viewModel)
+        Spacer(modifier = Modifier.height(10.dp))
+        BeatRail(
+            state = state,
+            onCycle = viewModel::cycleBeatAccent,
+            onReset = viewModel::resetBeatAccents
+        )
+        Text(
+            text = "tap beats · strong / normal / mute",
+            style = MaterialTheme.typography.labelMedium,
+            color = Ash,
+            modifier = Modifier
+                .padding(top = 6.dp)
+                .height(16.dp),
+            maxLines = 1
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        PhaseBanner(state)
+        TempoHero(state = state, onNudge = viewModel::nudgeBpm)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = secondaryLabel(state),
+            style = MaterialTheme.typography.labelMedium,
+            color = phaseColor(state.sessionPhase),
+            modifier = Modifier.height(18.dp),
+            maxLines = 1
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        SettingsColumn(
+            state = state,
+            detectState = detectState,
+            detectDebug = detectDebug,
+            viewModel = viewModel
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun LandscapeBody(
+    state: MetronomeUiState,
+    detectState: DetectState,
+    detectDebug: DetectDebug?,
+    viewModel: MetronomeViewModel,
+    horizontalPad: Dp,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPad)
+            .padding(top = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            TopBar(state, viewModel)
+            Spacer(modifier = Modifier.height(8.dp))
+            BeatRail(
+                state = state,
+                onCycle = viewModel::cycleBeatAccent,
+                onReset = viewModel::resetBeatAccents
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 TempoHero(
                     state = state,
-                    onNudge = viewModel::nudgeBpm
+                    onNudge = viewModel::nudgeBpm,
+                    compact = true
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -197,63 +293,115 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
                     modifier = Modifier.height(18.dp),
                     maxLines = 1
                 )
-                Spacer(modifier = Modifier.height(10.dp))
-                ListenTempoStrip(
-                    state = state,
-                    detectState = detectState,
-                    viewModel = viewModel
-                )
-                if (detectDebug != null) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    ListenDebugPanel(
-                        debug = detectDebug!!,
-                        onApplyBpm = viewModel::applyListenBpm,
-                        onClear = viewModel::clearListenDebug
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                TempoPresets(state.bpm, onSelect = viewModel::setBpm)
-                PracticeStrip(state)
-                Spacer(modifier = Modifier.height(18.dp))
-                ControlRows(state, viewModel)
-                Spacer(modifier = Modifier.height(14.dp))
-                ExpandablePanel(
-                    title = "PRACTICE",
-                    summary = practiceSummary(state),
-                    initiallyExpanded = state.trainerEnabled || state.mutePattern.silentBars > 0
-                ) {
-                    PracticePanelBody(state, viewModel)
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                ExpandablePanel(
-                    title = "SONGS",
-                    summary = if (state.songs.isEmpty()) "bookmark to save" else "${state.songs.size} saved",
-                    initiallyExpanded = false
-                ) {
-                    SongsPanelBody(state, viewModel)
-                }
-                Spacer(modifier = Modifier.height(24.dp))
             }
+            Spacer(modifier = Modifier.weight(1f))
+        }
 
-            // Fixed transport dock
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Ink.copy(alpha = 0.92f),
-                                Ink
-                            )
-                        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState())
+        ) {
+            SettingsColumn(
+                state = state,
+                detectState = detectState,
+                detectDebug = detectDebug,
+                viewModel = viewModel
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun SettingsColumn(
+    state: MetronomeUiState,
+    detectState: DetectState,
+    detectDebug: DetectDebug?,
+    viewModel: MetronomeViewModel
+) {
+    ListenTempoStrip(
+        state = state,
+        detectState = detectState,
+        viewModel = viewModel
+    )
+    if (detectDebug != null) {
+        Spacer(modifier = Modifier.height(10.dp))
+        ListenDebugPanel(
+            debug = detectDebug,
+            onApplyBpm = viewModel::applyListenBpm,
+            onClear = viewModel::clearListenDebug
+        )
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    TempoPresets(state.bpm, onSelect = viewModel::setBpm)
+    PracticeStrip(state)
+    Spacer(modifier = Modifier.height(18.dp))
+    ControlRows(state, viewModel)
+    Spacer(modifier = Modifier.height(14.dp))
+    ExpandablePanel(
+        title = "PRACTICE",
+        summary = practiceSummary(state),
+        initiallyExpanded = state.trainerEnabled || state.mutePattern.silentBars > 0
+    ) {
+        PracticePanelBody(state, viewModel)
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    ExpandablePanel(
+        title = "SONGS",
+        summary = if (state.songs.isEmpty()) "bookmark to save" else "${state.songs.size} saved",
+        initiallyExpanded = false
+    ) {
+        SongsPanelBody(state, viewModel)
+    }
+}
+
+@Composable
+private fun TransportDock(
+    state: MetronomeUiState,
+    viewModel: MetronomeViewModel,
+    landscape: Boolean,
+    horizontalPad: Dp
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Ink.copy(alpha = 0.92f),
+                        Ink
                     )
-                    .padding(horizontal = 24.dp)
-                    .padding(top = 12.dp, bottom = 10.dp)
+                )
+            )
+            .padding(horizontal = horizontalPad)
+            .padding(top = 10.dp, bottom = 10.dp)
+    ) {
+        if (landscape) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                TransportRow(state, viewModel)
-                Spacer(Modifier.height(14.dp))
+                VolumeRow(
+                    state = state,
+                    viewModel = viewModel,
+                    modifier = Modifier.weight(1f)
+                )
+                TransportRow(
+                    state = state,
+                    viewModel = viewModel,
+                    compact = true,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        } else {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 VolumeRow(state, viewModel)
+                Spacer(modifier = Modifier.height(14.dp))
+                TransportRow(state, viewModel)
             }
         }
     }
@@ -1460,10 +1608,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBeatMarkers(
 @Composable
 private fun TempoHero(
     state: MetronomeUiState,
-    onNudge: (Int) -> Unit
+    onNudge: (Int) -> Unit,
+    compact: Boolean = false
 ) {
     var dragAccum by remember { mutableFloatStateOf(0f) }
     val beatScale = remember { Animatable(1f) }
+    val bpmSize = if (compact) 64.sp else 100.sp
+    val bpmBoxHeight = if (compact) 72.dp else 108.dp
 
     LaunchedEffect(state.beatFlash) {
         if (!state.isPlaying || state.beatFlash == 0L) return@LaunchedEffect
@@ -1504,12 +1655,12 @@ private fun TempoHero(
                 }
         ) {
             Box(
-                modifier = Modifier.height(108.dp),
+                modifier = Modifier.height(bpmBoxHeight),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = state.bpm.toString(),
-                    style = MaterialTheme.typography.displayLarge.copy(fontSize = 100.sp),
+                    style = MaterialTheme.typography.displayLarge.copy(fontSize = bpmSize),
                     color = if (state.sessionPhase == SessionPhase.SILENT) Ash else Bone,
                     textAlign = TextAlign.Center,
                     maxLines = 1
@@ -1857,9 +2008,18 @@ private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun TransportRow(state: MetronomeUiState, viewModel: MetronomeViewModel) {
+private fun TransportRow(
+    state: MetronomeUiState,
+    viewModel: MetronomeViewModel,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
+) {
+    val chipWidth = if (compact) 56.dp else 64.dp
+    val playSize = if (compact) 64.dp else 84.dp
+    val playIcon = if (compact) 32.dp else 40.dp
+
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1874,7 +2034,7 @@ private fun TransportRow(state: MetronomeUiState, viewModel: MetronomeViewModel)
             label = "−5",
             onClick = { viewModel.nudgeBpm(-5) },
             onLongPress = { viewModel.setBpm(60) },
-            modifier = Modifier.width(64.dp)
+            modifier = Modifier.width(chipWidth)
         )
 
         val playScale = remember { Animatable(1f) }
@@ -1885,7 +2045,7 @@ private fun TransportRow(state: MetronomeUiState, viewModel: MetronomeViewModel)
 
         Box(
             modifier = Modifier
-                .size(84.dp)
+                .size(playSize)
                 .scale(playScale.value)
                 .clip(CircleShape)
                 .background(
@@ -1900,7 +2060,7 @@ private fun TransportRow(state: MetronomeUiState, viewModel: MetronomeViewModel)
                 imageVector = if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                 contentDescription = if (state.isPlaying) "Stop" else "Start",
                 tint = Ink,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(playIcon)
             )
         }
 
@@ -1908,7 +2068,7 @@ private fun TransportRow(state: MetronomeUiState, viewModel: MetronomeViewModel)
             label = "+5",
             onClick = { viewModel.nudgeBpm(5) },
             onLongPress = { viewModel.setBpm(120) },
-            modifier = Modifier.width(64.dp)
+            modifier = Modifier.width(chipWidth)
         )
     }
 }
@@ -1946,9 +2106,13 @@ private fun TransportChip(
 }
 
 @Composable
-private fun VolumeRow(state: MetronomeUiState, viewModel: MetronomeViewModel) {
+private fun VolumeRow(
+    state: MetronomeUiState,
+    viewModel: MetronomeViewModel,
+    modifier: Modifier = Modifier
+) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(

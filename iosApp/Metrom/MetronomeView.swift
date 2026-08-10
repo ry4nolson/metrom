@@ -2,73 +2,44 @@ import SwiftUI
 
 struct MetronomeView: View {
     @EnvironmentObject var bridge: MetronomeBridge
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     @State private var practiceExpanded = false
     @State private var songsExpanded = false
     @State private var bpmScale: CGFloat = 1
 
+    private var isWide: Bool {
+        horizontalSizeClass == .regular
+    }
+
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [MetromTheme.backgroundTop, MetromTheme.ink, MetromTheme.backgroundBottom],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+        GeometryReader { geo in
+            let isLandscape = geo.size.width > geo.size.height
+            let pad = horizontalPadding(landscape: isLandscape)
 
-            PendulumAtmosphere(
-                isPlaying: bridge.isPlaying,
-                beatFlash: bridge.beatFlash,
-                isAccent: bridge.isAccentBeat,
-                bpm: bridge.bpm,
-                groupTempo: bridge.groupTempo,
-                phase: bridge.sessionPhase
-            )
-            .allowsHitTesting(false)
+            ZStack {
+                LinearGradient(
+                    colors: [MetromTheme.backgroundTop, MetromTheme.ink, MetromTheme.backgroundBottom],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        header
-                        beatRail
-                            .padding(.top, 10)
-                        Text("tap beats · strong / normal / mute")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(MetromTheme.ash)
-                            .padding(.top, 6)
-                        tempoHero
-                            .padding(.top, 16)
-                        Text(secondaryLabel)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(MetromTheme.phaseColor(bridge.sessionPhase))
-                            .frame(height: 18)
-                            .padding(.top, 4)
-                        listenStrip
-                            .padding(.top, 10)
-                        chipRow(presets: [60, 72, 80, 92, 100, 120, 140, 160].map { "\($0)" }) { label in
-                            if let v = Int32(label) { bridge.setBpm(v) }
-                        } isSelected: { $0 == "\(bridge.bpm)" }
-                        .padding(.top, 12)
+                PendulumAtmosphere(
+                    isPlaying: bridge.isPlaying,
+                    beatFlash: bridge.beatFlash,
+                    isAccent: bridge.isAccentBeat,
+                    bpm: bridge.bpm,
+                    groupTempo: bridge.groupTempo,
+                    phase: bridge.sessionPhase
+                )
+                .allowsHitTesting(false)
 
-                        controls
-                            .padding(.top, 18)
-
-                        expandable("PRACTICE", summary: practiceSummary, expanded: $practiceExpanded) {
-                            practiceBody
-                        }
-                        .padding(.top, 14)
-
-                        expandable("SONGS", summary: bridge.songs.isEmpty ? "bookmark to save" : "\(bridge.songs.count) saved", expanded: $songsExpanded) {
-                            songsBody
-                        }
-                        .padding(.top, 12)
-
-                        Spacer(minLength: 120)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
+                if isLandscape {
+                    landscapeLayout(padding: pad)
+                } else {
+                    portraitLayout(padding: pad)
                 }
-
-                transportDock
             }
         }
         .onChange(of: bridge.beatFlash) { _ in
@@ -82,14 +53,134 @@ struct MetronomeView: View {
         }
     }
 
-    private var header: some View {
+    // MARK: - Metrics
+
+    private func horizontalPadding(landscape: Bool) -> CGFloat {
+        if landscape { return isWide ? 32 : 20 }
+        return isWide ? 36 : 24
+    }
+
+    private func sectionGap(landscape: Bool) -> CGFloat {
+        if landscape { return isWide ? 12 : 8 }
+        return isWide ? 18 : 12
+    }
+
+    private func bpmFontSize(landscape: Bool) -> CGFloat {
+        if landscape { return isWide ? 96 : 64 }
+        return isWide ? 120 : 92
+    }
+
+    private func playButtonSize(landscape: Bool) -> CGFloat {
+        if landscape { return isWide ? 84 : 64 }
+        return isWide ? 96 : 84
+    }
+
+    private func titleSize(landscape: Bool) -> CGFloat {
+        if landscape { return isWide ? 28 : 22 }
+        return isWide ? 34 : 28
+    }
+
+    // MARK: - Portrait (single column, full width)
+
+    private func portraitLayout(padding: CGFloat) -> some View {
+        let gap = sectionGap(landscape: false)
+        return VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    header(landscape: false)
+                    beatRail(landscape: false)
+                        .padding(.top, gap)
+                    Text("tap beats · strong / normal / mute")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(MetromTheme.ash)
+                        .padding(.top, isWide ? 10 : 6)
+                    tempoHero(landscape: false)
+                        .padding(.top, isWide ? 28 : 16)
+                    Text(secondaryLabel)
+                        .font(.system(size: isWide ? 14 : 12, weight: .semibold))
+                        .foregroundStyle(MetromTheme.phaseColor(bridge.sessionPhase))
+                        .frame(height: 18)
+                        .padding(.top, isWide ? 8 : 4)
+                    listenStrip
+                        .padding(.top, gap)
+                    bpmPresets
+                        .padding(.top, gap)
+                    controls(landscape: false)
+                        .padding(.top, isWide ? 28 : 18)
+                    expandable("PRACTICE", summary: practiceSummary, expanded: $practiceExpanded) {
+                        practiceBody
+                    }
+                    .padding(.top, isWide ? 22 : 14)
+                    expandable("SONGS", summary: bridge.songs.isEmpty ? "bookmark to save" : "\(bridge.songs.count) saved", expanded: $songsExpanded) {
+                        songsBody
+                    }
+                    .padding(.top, gap)
+                    Spacer(minLength: isWide ? 160 : 120)
+                }
+                .padding(.horizontal, padding)
+                .padding(.top, isWide ? 16 : 8)
+                .frame(maxWidth: .infinity)
+            }
+
+            transportDock(landscape: false, padding: padding)
+        }
+    }
+
+    // MARK: - Landscape (two columns, full-width transport)
+
+    private func landscapeLayout(padding: CGFloat) -> some View {
+        let gap = sectionGap(landscape: true)
+        return VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: isWide ? 28 : 16) {
+                VStack(spacing: gap) {
+                    header(landscape: true)
+                    beatRail(landscape: true)
+                    Spacer(minLength: 0)
+                    VStack(spacing: 4) {
+                        tempoHero(landscape: true)
+                        Text(secondaryLabel)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(MetromTheme.phaseColor(bridge.sessionPhase))
+                            .frame(height: 18)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: gap) {
+                        listenStrip
+                        bpmPresets
+                        controls(landscape: true)
+                        expandable("PRACTICE", summary: practiceSummary, expanded: $practiceExpanded) {
+                            practiceBody
+                        }
+                        expandable("SONGS", summary: bridge.songs.isEmpty ? "bookmark to save" : "\(bridge.songs.count) saved", expanded: $songsExpanded) {
+                            songsBody
+                        }
+                        Spacer(minLength: 8)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .padding(.horizontal, padding)
+            .padding(.top, isWide ? 16 : 10)
+
+            transportDock(landscape: true, padding: padding)
+        }
+    }
+
+    // MARK: - Shared sections
+
+    private func header(landscape: Bool) -> some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("METROM")
-                    .font(.system(size: 28, weight: .heavy, design: .rounded))
+                    .font(.system(size: titleSize(landscape: landscape), weight: .heavy, design: .rounded))
                     .foregroundStyle(MetromTheme.bone)
                 Text(bridge.statusLine)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: isWide && !landscape ? 13 : 12, weight: .semibold))
                     .foregroundStyle(MetromTheme.phaseColor(bridge.sessionPhase))
             }
             Spacer()
@@ -107,8 +198,8 @@ struct MetronomeView: View {
         }
     }
 
-    private var beatRail: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+    private func beatRail(landscape: Bool) -> some View {
+        HStack(alignment: .bottom, spacing: isWide ? 12 : 8) {
             ForEach(Array(bridge.beatAccents.enumerated()), id: \.offset) { idx, level in
                 let active = bridge.isPlaying && idx == bridge.activeBeat
                 Button {
@@ -118,7 +209,7 @@ struct MetronomeView: View {
                         Capsule()
                             .fill(beatFill(level: level, active: active))
                             .frame(maxWidth: .infinity)
-                            .frame(height: beatHeight(level))
+                            .frame(height: beatHeight(level, landscape: landscape))
                             .overlay {
                                 if level == .mute {
                                     Capsule().stroke(MetromTheme.ash.opacity(0.45), lineWidth: 1)
@@ -139,31 +230,30 @@ struct MetronomeView: View {
                 )
             }
         }
-        .frame(height: 48)
+        .frame(height: landscape ? (isWide ? 48 : 40) : (isWide ? 56 : 48))
     }
 
-    private var tempoHero: some View {
-        HStack(spacing: 12) {
+    private func tempoHero(landscape: Bool) -> some View {
+        let size = bpmFontSize(landscape: landscape)
+        return HStack(spacing: isWide && !landscape ? 20 : 12) {
             RoundIconButton(systemName: "minus") { bridge.nudgeBpm(-1) }
             VStack(spacing: 4) {
                 Text("\(bridge.bpm)")
-                    .font(.system(size: 92, weight: .bold, design: .rounded))
+                    .font(.system(size: size, weight: .bold, design: .rounded))
                     .foregroundStyle(bridge.sessionPhase == "SILENT" ? MetromTheme.ash : MetromTheme.bone)
                     .scaleEffect(bpmScale)
-                    .frame(height: 100)
+                    .frame(height: size + 8)
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
                     .gesture(
                         DragGesture()
                             .onChanged { value in
                                 let steps = Int((-value.translation.height) / 14)
-                                // Handled via discrete nudge on end would be better;
-                                // keep simple: ignore continuous drag for now
                                 _ = steps
                             }
                     )
                 Text(bridge.tapHint ?? "BPM · nudge to change")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: isWide && !landscape ? 13 : 12, weight: .medium))
                     .foregroundStyle(bridge.tapHint == nil ? MetromTheme.ash : MetromTheme.emberSoft)
                     .frame(height: 18)
             }
@@ -211,8 +301,14 @@ struct MetronomeView: View {
         .frame(minHeight: 40)
     }
 
-    private var controls: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private var bpmPresets: some View {
+        chipRow(presets: [60, 72, 80, 92, 100, 120, 140, 160].map { "\($0)" }) { label in
+            if let v = Int32(label) { bridge.setBpm(v) }
+        } isSelected: { $0 == "\(bridge.bpm)" }
+    }
+
+    private func controls(landscape: Bool) -> some View {
+        VStack(alignment: .leading, spacing: landscape ? 12 : (isWide ? 18 : 14)) {
             labeledChips("METER", bridge.meterOptions, bridge.meterLabel, bridge.selectMeter) {
                 ChoiceChip(label: "Accents", selected: false, action: bridge.resetBeatAccents)
             }
@@ -296,59 +392,118 @@ struct MetronomeView: View {
         }
     }
 
-    private var transportDock: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: bridge.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .foregroundStyle(MetromTheme.ash)
-                Slider(
-                    value: Binding(
-                        get: { Double(bridge.volume) },
-                        set: { bridge.setVolume(Float($0)) }
-                    ),
-                    in: 0...1
-                )
-                .tint(MetromTheme.ember)
-            }
-            .padding(.horizontal, 24)
-
-            HStack(spacing: 10) {
-                TransportChip(label: "TAP", icon: "hand.tap.fill", action: bridge.tapTempo)
-                    .frame(maxWidth: .infinity)
-                TransportChip(label: "−5") { bridge.nudgeBpm(-5) }
-                    .frame(width: 64)
-                Button(action: bridge.togglePlay) {
-                    Image(systemName: bridge.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundStyle(MetromTheme.ink)
-                        .frame(width: 84, height: 84)
-                        .background(
-                            Circle().fill(
-                                RadialGradient(
-                                    colors: [MetromTheme.emberSoft, MetromTheme.ember, Color(red: 0.72, green: 0.20, blue: 0.07)],
-                                    center: .center,
-                                    startRadius: 4,
-                                    endRadius: 48
-                                )
-                            )
+    private func transportDock(landscape: Bool, padding: CGFloat) -> some View {
+        let playSize = playButtonSize(landscape: landscape)
+        return Group {
+            if landscape {
+                HStack(alignment: .center, spacing: isWide ? 24 : 16) {
+                    HStack(spacing: 12) {
+                        Image(systemName: bridge.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .foregroundStyle(MetromTheme.ash)
+                        Slider(
+                            value: Binding(
+                                get: { Double(bridge.volume) },
+                                set: { bridge.setVolume(Float($0)) }
+                            ),
+                            in: 0...1
                         )
+                        .tint(MetromTheme.ember)
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    HStack(spacing: 10) {
+                        TransportChip(label: "TAP", icon: "hand.tap.fill", action: bridge.tapTempo)
+                            .frame(maxWidth: .infinity)
+                        TransportChip(label: "−5") { bridge.nudgeBpm(-5) }
+                            .frame(width: 56)
+                        Button(action: bridge.togglePlay) {
+                            Image(systemName: bridge.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(MetromTheme.ink)
+                                .frame(width: playSize, height: playSize)
+                                .background(
+                                    Circle().fill(
+                                        RadialGradient(
+                                            colors: [MetromTheme.emberSoft, MetromTheme.ember, Color(red: 0.72, green: 0.20, blue: 0.07)],
+                                            center: .center,
+                                            startRadius: 4,
+                                            endRadius: playSize * 0.57
+                                        )
+                                    )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        TransportChip(label: "+5") { bridge.nudgeBpm(5) }
+                            .frame(width: 56)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
-                TransportChip(label: "+5") { bridge.nudgeBpm(5) }
-                    .frame(width: 64)
+                .padding(.horizontal, padding)
+                .padding(.top, 10)
+                .padding(.bottom, 12)
+                .background(
+                    LinearGradient(
+                        colors: [.clear, MetromTheme.ink.opacity(0.92), MetromTheme.ink],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .ignoresSafeArea(edges: .bottom)
+                )
+            } else {
+                VStack(spacing: isWide ? 14 : 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: bridge.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .foregroundStyle(MetromTheme.ash)
+                        Slider(
+                            value: Binding(
+                                get: { Double(bridge.volume) },
+                                set: { bridge.setVolume(Float($0)) }
+                            ),
+                            in: 0...1
+                        )
+                        .tint(MetromTheme.ember)
+                    }
+                    .padding(.horizontal, padding)
+
+                    HStack(spacing: isWide ? 14 : 10) {
+                        TransportChip(label: "TAP", icon: "hand.tap.fill", action: bridge.tapTempo)
+                            .frame(maxWidth: .infinity)
+                        TransportChip(label: "−5") { bridge.nudgeBpm(-5) }
+                            .frame(width: isWide ? 72 : 64)
+                        Button(action: bridge.togglePlay) {
+                            Image(systemName: bridge.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: isWide ? 32 : 28, weight: .bold))
+                                .foregroundStyle(MetromTheme.ink)
+                                .frame(width: playSize, height: playSize)
+                                .background(
+                                    Circle().fill(
+                                        RadialGradient(
+                                            colors: [MetromTheme.emberSoft, MetromTheme.ember, Color(red: 0.72, green: 0.20, blue: 0.07)],
+                                            center: .center,
+                                            startRadius: 4,
+                                            endRadius: playSize * 0.57
+                                        )
+                                    )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        TransportChip(label: "+5") { bridge.nudgeBpm(5) }
+                            .frame(width: isWide ? 72 : 64)
+                    }
+                    .padding(.horizontal, padding)
+                    .padding(.bottom, 20)
+                }
+                .padding(.top, isWide ? 14 : 10)
+                .background(
+                    LinearGradient(
+                        colors: [.clear, MetromTheme.ink.opacity(0.92), MetromTheme.ink],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .ignoresSafeArea(edges: .bottom)
+                )
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 20)
         }
-        .padding(.top, 10)
-        .background(
-            LinearGradient(
-                colors: [.clear, MetromTheme.ink.opacity(0.92), MetromTheme.ink],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea(edges: .bottom)
-        )
     }
 
     private var secondaryLabel: String {
@@ -452,11 +607,12 @@ struct MetronomeView: View {
         .buttonStyle(.plain)
     }
 
-    private func beatHeight(_ level: MetronomeBridge.BeatAccentLevel) -> CGFloat {
+    private func beatHeight(_ level: MetronomeBridge.BeatAccentLevel, landscape: Bool) -> CGFloat {
+        let wide = isWide && !landscape
         switch level {
-        case .strong: return 14
-        case .normal: return 8
-        case .mute: return 4
+        case .strong: return wide ? 16 : 14
+        case .normal: return wide ? 10 : 8
+        case .mute: return wide ? 5 : 4
         }
     }
 
