@@ -143,7 +143,7 @@ final class MetronomeBridge: ObservableObject {
         let prefs = IosPrefsStore()
         themeStore = ColorThemeStore(prefs: prefs)
         meterStore = CustomMeterStore(prefs: prefs)
-        metromDatabase = MetromSqlDriverKt.openMetromDatabase(driver: MetromSqlDriverKt.createMetromSqlDriver())
+        metromDatabase = MetromSqlDriverKt.openMetromDatabase()
         let assets = IosAssetIO()
         let cache = SampleToneCache(assets: assets)
         sink = AVAudioPcmSink()

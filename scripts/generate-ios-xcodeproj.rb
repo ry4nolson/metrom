@@ -83,7 +83,8 @@ shared_settings = {
     '$(inherited) "$(SRCROOT)/../shared/build/bin/iosSimulatorArm64/debugFramework"',
   'FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]' =>
     '$(inherited) "$(SRCROOT)/../shared/build/bin/iosArm64/releaseFramework" "$(SRCROOT)/../shared/build/bin/iosArm64/debugFramework"',
-  'OTHER_LDFLAGS' => '$(inherited) -framework MetromShared',
+  # Static MetromShared does not propagate Gradle linkerOpts(-lsqlite3) to the app.
+  'OTHER_LDFLAGS' => '$(inherited) -framework MetromShared -lsqlite3',
   'ENABLE_PREVIEWS' => 'NO',
   'ENABLE_DEBUG_DYLIB' => 'NO',
   'CURRENT_PROJECT_VERSION' => '1',

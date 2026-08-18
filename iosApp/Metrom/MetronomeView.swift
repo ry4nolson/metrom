@@ -302,6 +302,11 @@ struct MetronomeView: View {
                 tint: bridge.muted ? palette.ash : palette.bone,
                 action: bridge.toggleMute
             )
+            iconButton(
+                "iphone.radiowaves.left.and.right",
+                tint: bridge.hapticsOn ? palette.bone : palette.ash,
+                action: bridge.toggleHaptics
+            )
             iconButton("gearshape.fill", tint: palette.bone) {
                 showSettings = true
             }

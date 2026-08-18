@@ -64,6 +64,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material3.Icon
@@ -754,6 +755,13 @@ private fun TopBar(
                 imageVector = if (state.muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
                 contentDescription = "Mute",
                 tint = if (state.muted) Ash else Bone
+            )
+        }
+        IconButton(onClick = viewModel::toggleHaptics) {
+            Icon(
+                imageVector = Icons.Rounded.Vibration,
+                contentDescription = "Haptics",
+                tint = if (state.haptics) Bone else Ash
             )
         }
         IconButton(onClick = onOpenSettings) {

@@ -232,6 +232,7 @@
 					"$(inherited)",
 					"-framework",
 					MetromShared,
+					"-lsqlite3",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.metrom.app;
 				PRODUCT_NAME = Metrom;
@@ -330,6 +331,7 @@
 					"$(inherited)",
 					"-framework",
 					MetromShared,
+					"-lsqlite3",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.metrom.app;
 				PRODUCT_NAME = Metrom;
