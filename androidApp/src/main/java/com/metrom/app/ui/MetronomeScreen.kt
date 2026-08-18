@@ -110,6 +110,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.metrom.app.MetronomeViewModel
+import com.metrom.shared.data.SetSection
+import com.metrom.shared.data.Setlist
 import com.metrom.shared.data.SongPreset
 import com.metrom.shared.detect.DetectDebug
 import com.metrom.shared.detect.DetectState
@@ -397,6 +399,9 @@ private fun SettingsColumn(
     Spacer(modifier = Modifier.height(12.dp))
     TempoPresets(state.bpm, onSelect = viewModel::setBpm)
     PracticeStrip(state)
+    if (state.inSetMode) {
+        SetlistStrip(state, viewModel)
+    }
     Spacer(modifier = Modifier.height(18.dp))
     ControlRows(state, viewModel, onOpenCustomMeters)
     Spacer(modifier = Modifier.height(14.dp))
@@ -414,6 +419,14 @@ private fun SettingsColumn(
         initiallyExpanded = false
     ) {
         SongsPanelBody(state, viewModel)
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    ExpandablePanel(
+        title = "SETLISTS",
+        summary = setlistSummary(state),
+        initiallyExpanded = state.inSetMode
+    ) {
+        SetlistsPanelBody(state, viewModel)
     }
 }
 
@@ -884,6 +897,10 @@ private fun ExpandablePanel(
 }
 
 private fun practiceSummary(state: MetronomeUiState): String {
+    if (state.inSetMode) {
+        val set = state.setlists.firstOrNull { it.id == state.activeSetlistId }
+        return set?.name?.let { "set · $it" } ?: "set mode"
+    }
     val parts = mutableListOf<String>()
     parts += if (state.countInBars == 0) "no count-in" else ("count-in " + state.countInBars)
     parts += if (state.mutePattern.silentBars == 0) "mute off" else ("mute " + state.mutePattern.label)
@@ -891,6 +908,16 @@ private fun practiceSummary(state: MetronomeUiState): String {
         parts += ("train →" + state.trainerTargetBpm)
     }
     return parts.joinToString(" · ")
+}
+
+private fun setlistSummary(state: MetronomeUiState): String {
+    if (state.inSetMode) {
+        val set = state.setlists.firstOrNull { it.id == state.activeSetlistId }
+        val count = set?.sections?.size ?: 0
+        val index = state.activeSectionIndex + 1
+        return set?.name?.let { "$it · $index/$count" } ?: "set mode"
+    }
+    return if (state.setlists.isEmpty()) "build a set" else "${state.setlists.size} saved"
 }
 
 @Composable
@@ -1017,8 +1044,8 @@ private fun TempoPresets(currentBpm: Int, onSelect: (Int) -> Unit) {
 
 @Composable
 private fun PracticeStrip(state: MetronomeUiState) {
-    val showMute = state.mutePattern.silentBars > 0
-    val showTrainer = state.trainerEnabled
+    val showMute = !state.inSetMode && state.mutePattern.silentBars > 0
+    val showTrainer = !state.inSetMode && state.trainerEnabled
     if (!showMute && !showTrainer) {
         Spacer(modifier = Modifier.height(0.dp))
         return
@@ -1844,52 +1871,61 @@ private fun PracticePanelBody(state: MetronomeUiState, viewModel: MetronomeViewM
             }
         }
 
-        LabeledChipRow(label = "MUTE BARS") {
-            MutePattern.OPTIONS.forEach { pattern ->
-                ChoiceChip(
-                    label = pattern.label,
-                    selected = state.mutePattern == pattern,
-                    onClick = { viewModel.setMutePattern(pattern) }
-                )
+        val setLocked = state.inSetMode
+        Column(modifier = Modifier.alpha(if (setLocked) 0.38f else 1f)) {
+            LabeledChipRow(label = if (setLocked) "MUTE BARS · SET MODE" else "MUTE BARS") {
+                MutePattern.OPTIONS.forEach { pattern ->
+                    ChoiceChip(
+                        label = pattern.label,
+                        selected = state.mutePattern == pattern,
+                        onClick = { if (!setLocked) viewModel.setMutePattern(pattern) }
+                    )
+                }
             }
         }
 
-        LabeledChipRow(label = "TRAINER") {
-            ChoiceChip(
-                label = if (state.trainerEnabled) "On" else "Off",
-                selected = state.trainerEnabled,
-                onClick = viewModel::toggleTrainer
-            )
-            if (state.trainerEnabled) {
+        Column(modifier = Modifier.alpha(if (setLocked) 0.38f else 1f)) {
+            LabeledChipRow(label = if (setLocked) "TRAINER · SET MODE" else "TRAINER") {
                 ChoiceChip(
-                    label = "→${state.trainerTargetBpm}",
-                    selected = false,
-                    onClick = viewModel::cycleTrainerTarget
+                    label = if (state.trainerEnabled) "On" else "Off",
+                    selected = state.trainerEnabled,
+                    onClick = { if (!setLocked) viewModel.toggleTrainer() }
                 )
-                ChoiceChip(
-                    label = "±${state.trainerStep}",
-                    selected = false,
-                    onClick = {
-                        viewModel.setTrainerStep(if (state.trainerStep >= 5) 1 else state.trainerStep + 1)
-                    }
-                )
-                ChoiceChip(
-                    label = "each ${state.trainerEveryBars}",
-                    selected = false,
-                    onClick = {
-                        val next = when (state.trainerEveryBars) {
-                            2 -> 4
-                            4 -> 8
-                            else -> 2
+                if (state.trainerEnabled) {
+                    ChoiceChip(
+                        label = "→${state.trainerTargetBpm}",
+                        selected = false,
+                        onClick = { if (!setLocked) viewModel.cycleTrainerTarget() }
+                    )
+                    ChoiceChip(
+                        label = "±${state.trainerStep}",
+                        selected = false,
+                        onClick = {
+                            if (!setLocked) {
+                                viewModel.setTrainerStep(if (state.trainerStep >= 5) 1 else state.trainerStep + 1)
+                            }
                         }
-                        viewModel.setTrainerEveryBars(next)
-                    }
-                )
-                ChoiceChip(
-                    label = if (state.trainerAutoStop) "stop" else "hold",
-                    selected = state.trainerAutoStop,
-                    onClick = viewModel::toggleTrainerAutoStop
-                )
+                    )
+                    ChoiceChip(
+                        label = "each ${state.trainerEveryBars}",
+                        selected = false,
+                        onClick = {
+                            if (!setLocked) {
+                                val next = when (state.trainerEveryBars) {
+                                    2 -> 4
+                                    4 -> 8
+                                    else -> 2
+                                }
+                                viewModel.setTrainerEveryBars(next)
+                            }
+                        }
+                    )
+                    ChoiceChip(
+                        label = if (state.trainerAutoStop) "stop" else "hold",
+                        selected = state.trainerAutoStop,
+                        onClick = { if (!setLocked) viewModel.toggleTrainerAutoStop() }
+                    )
+                }
             }
         }
     }
@@ -2022,6 +2058,393 @@ private fun SongRow(
             Icon(Icons.Filled.Close, contentDescription = "Delete", tint = Ash)
         }
     }
+}
+
+@Composable
+private fun SetlistStrip(state: MetronomeUiState, viewModel: MetronomeViewModel) {
+    val setlist = state.setlists.firstOrNull { it.id == state.activeSetlistId } ?: return
+    val section = setlist.sections.getOrNull(state.activeSectionIndex)
+    val count = setlist.sections.size
+    val indexLabel = "${state.activeSectionIndex + 1}/$count"
+    val sectionTitle = section?.let { sectionLabel(it) } ?: setlist.name
+    val bars = section?.bars ?: 0
+    val progress = if (bars > 0) {
+        (state.sectionBar.toFloat() / bars.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 14.dp)
+            .heightIn(min = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = setlist.name.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = EmberSoft,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = "section $indexLabel · $sectionTitle",
+            style = MaterialTheme.typography.labelMedium,
+            color = Ash,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (bars > 0) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(InkLine)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress)
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(99.dp))
+                        .background(Ember)
+                )
+            }
+            Text(
+                text = "${state.sectionBar.coerceIn(0, bars)} / $bars",
+                style = MaterialTheme.typography.labelMedium,
+                color = Ash
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ChoiceChip(
+                label = "Next",
+                selected = false,
+                onClick = viewModel::advanceSection
+            )
+            ChoiceChip(
+                label = "Exit",
+                selected = false,
+                onClick = viewModel::exitSetlist
+            )
+        }
+    }
+}
+
+@Composable
+private fun SetlistsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewModel) {
+    var editingId by remember { mutableStateOf<String?>(null) }
+    var creating by remember { mutableStateOf(false) }
+    var createName by remember { mutableStateOf("") }
+    var renaming by remember { mutableStateOf<Setlist?>(null) }
+    var renameText by remember { mutableStateOf("") }
+
+    val editing = state.setlists.firstOrNull { it.id == editingId }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (editing != null) {
+            ChoiceChip(
+                label = "All setlists",
+                selected = false,
+                onClick = { editingId = null }
+            )
+            Text(
+                editing.name,
+                style = MaterialTheme.typography.titleLarge,
+                color = Bone,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            ChoiceChip(
+                label = "Add current as section",
+                selected = false,
+                onClick = { viewModel.addSectionFromCurrent(editing.id) }
+            )
+            if (editing.sections.isEmpty()) {
+                Text(
+                    "Add the current tempo, meter, and tone as a section. Open-ended until you set a bar count.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Ash
+                )
+            } else {
+                editing.sections.forEachIndexed { index, section ->
+                    SectionEditorRow(
+                        section = section,
+                        selected = state.inSetMode &&
+                            state.activeSetlistId == editing.id &&
+                            state.activeSectionIndex == index,
+                        isFirst = index == 0,
+                        isLast = index == editing.sections.lastIndex,
+                        onBars = { bars ->
+                            viewModel.updateSection(
+                                editing.id,
+                                section.copy(bars = bars, autoAdvance = if (bars == 0) false else section.autoAdvance),
+                            )
+                        },
+                        onToggleAuto = {
+                            viewModel.updateSection(
+                                editing.id,
+                                section.copy(autoAdvance = !section.autoAdvance),
+                            )
+                        },
+                        onMoveUp = { viewModel.moveSection(editing.id, index, index - 1) },
+                        onMoveDown = { viewModel.moveSection(editing.id, index, index + 1) },
+                        onRemove = { viewModel.removeSection(editing.id, section.id) }
+                    )
+                }
+            }
+        } else {
+            ChoiceChip(
+                label = "New setlist",
+                selected = false,
+                onClick = {
+                    createName = "Set ${state.setlists.size + 1}"
+                    creating = true
+                }
+            )
+            if (state.setlists.isEmpty()) {
+                Text(
+                    "Save an ordered set of songs. Tap to load, long-press to rename.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Ash
+                )
+            } else {
+                state.setlists.forEach { setlist ->
+                    SetlistRow(
+                        setlist = setlist,
+                        selected = state.activeSetlistId == setlist.id,
+                        onLoad = {
+                            viewModel.loadSetlist(setlist)
+                            editingId = setlist.id
+                        },
+                        onDelete = { viewModel.deleteSetlist(setlist.id) },
+                        onRename = {
+                            renaming = setlist
+                            renameText = setlist.name
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    if (creating) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { creating = false },
+            title = { Text("New setlist", color = Bone) },
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = createName,
+                    onValueChange = { createName = it },
+                    singleLine = true,
+                    label = { Text("Name") }
+                )
+            },
+            confirmButton = {
+                Text(
+                    "SAVE",
+                    color = EmberSoft,
+                    modifier = Modifier
+                        .clickable {
+                            viewModel.createSetlist(createName)
+                            creating = false
+                        }
+                        .padding(8.dp)
+                )
+            },
+            dismissButton = {
+                Text(
+                    "CANCEL",
+                    color = Ash,
+                    modifier = Modifier
+                        .clickable { creating = false }
+                        .padding(8.dp)
+                )
+            },
+            containerColor = InkElevated
+        )
+    }
+
+    renaming?.let { setlist ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Rename setlist", color = Bone) },
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                    label = { Text("Name") }
+                )
+            },
+            confirmButton = {
+                Text(
+                    "SAVE",
+                    color = EmberSoft,
+                    modifier = Modifier
+                        .clickable {
+                            viewModel.renameSetlist(setlist.id, renameText)
+                            renaming = null
+                        }
+                        .padding(8.dp)
+                )
+            },
+            dismissButton = {
+                Text(
+                    "CANCEL",
+                    color = Ash,
+                    modifier = Modifier
+                        .clickable { renaming = null }
+                        .padding(8.dp)
+                )
+            },
+            containerColor = InkElevated
+        )
+    }
+}
+
+@Composable
+private fun SetlistRow(
+    setlist: Setlist,
+    selected: Boolean,
+    onLoad: () -> Unit,
+    onDelete: () -> Unit,
+    onRename: () -> Unit
+) {
+    val count = setlist.sections.size
+    val countLabel = if (count == 1) "1 section" else "$count sections"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) Ember.copy(alpha = 0.14f) else Color.Transparent)
+            .border(1.dp, if (selected) Ember.copy(alpha = 0.55f) else InkLine, RoundedCornerShape(12.dp))
+            .pointerInput(setlist.id) {
+                detectTapGestures(
+                    onTap = { onLoad() },
+                    onLongPress = { onRename() }
+                )
+            }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                setlist.name,
+                style = MaterialTheme.typography.titleLarge,
+                color = Bone,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                countLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = Ash,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Filled.Close, contentDescription = "Delete", tint = Ash)
+        }
+    }
+}
+
+@Composable
+private fun SectionEditorRow(
+    section: SetSection,
+    selected: Boolean,
+    isFirst: Boolean,
+    isLast: Boolean,
+    onBars: (Int) -> Unit,
+    onToggleAuto: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onRemove: () -> Unit
+) {
+    val barOptions = listOf(0, 2, 4, 8, 16, 32)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) Ember.copy(alpha = 0.14f) else Color.Transparent)
+            .border(1.dp, if (selected) Ember.copy(alpha = 0.55f) else InkLine, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    sectionLabel(section),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Bone,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    sectionLengthLabel(section),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Ash,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            IconButton(onClick = onMoveUp, enabled = !isFirst) {
+                Icon(
+                    Icons.Filled.ExpandLess,
+                    contentDescription = "Move up",
+                    tint = if (isFirst) InkLine else Ash
+                )
+            }
+            IconButton(onClick = onMoveDown, enabled = !isLast) {
+                Icon(
+                    Icons.Filled.ExpandMore,
+                    contentDescription = "Move down",
+                    tint = if (isLast) InkLine else Ash
+                )
+            }
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Filled.Close, contentDescription = "Remove", tint = Ash)
+            }
+        }
+        LabeledChipRow(label = "BARS") {
+            barOptions.forEach { bars ->
+                ChoiceChip(
+                    label = if (bars == 0) "Open" else bars.toString(),
+                    selected = section.bars == bars,
+                    onClick = { onBars(bars) }
+                )
+            }
+        }
+        if (section.bars > 0) {
+            ChoiceChip(
+                label = "Auto",
+                selected = section.autoAdvance,
+                onClick = onToggleAuto
+            )
+        }
+    }
+}
+
+private fun sectionLabel(section: SetSection): String =
+    section.label?.takeIf { it.isNotBlank() }
+        ?: SongPreset.autoName(
+            section.config.bpm,
+            section.config.timeSignature,
+            section.config.subdivision,
+        )
+
+private fun sectionLengthLabel(section: SetSection): String = when {
+    section.bars <= 0 -> "open-ended"
+    section.autoAdvance -> "${section.bars} bars · auto"
+    else -> "${section.bars} bars"
 }
 
 @Composable
