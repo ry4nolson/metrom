@@ -37,6 +37,11 @@ final class MetronomeBridge: ObservableObject {
     @Published private(set) var listenDebug: ListenDebugSnapshot? = nil
     @Published private(set) var songs: [SongRow] = []
     @Published private(set) var activeSongId: String? = nil
+    @Published private(set) var setlists: [SetlistRow] = []
+    @Published private(set) var activeSetlistId: String? = nil
+    @Published private(set) var activeSectionIndex: Int = -1
+    @Published private(set) var sectionBar: Int = 0
+    @Published private(set) var inSetMode: Bool = false
     @Published private(set) var groupTempo: Bool = false
     @Published private(set) var accentNoteLabel: String = "A4"
     @Published private(set) var restNoteLabel: String = "Off"
@@ -73,6 +78,20 @@ final class MetronomeBridge: ObservableObject {
         let id: String
         let name: String
         let detail: String
+    }
+
+    struct SetlistRow: Identifiable, Equatable {
+        let id: String
+        let name: String
+        let sectionCount: Int
+        let sections: [SectionRow]
+    }
+
+    struct SectionRow: Identifiable, Equatable {
+        let id: String
+        let summary: String
+        let bars: Int
+        let autoAdvance: Bool
     }
 
     /// Swift-side copy of shared DetectDebug for Canvas drawing.
@@ -411,6 +430,85 @@ final class MetronomeBridge: ObservableObject {
         refreshFromState()
     }
 
+    func createSetlist(name: String) {
+        controller.createSetlist(name: name)
+        refreshFromState()
+    }
+
+    func renameSetlist(id: String, name: String) {
+        controller.renameSetlist(id: id, name: name)
+        refreshFromState()
+    }
+
+    func deleteSetlist(id: String) {
+        controller.deleteSetlist(id: id)
+        refreshFromState()
+    }
+
+    func addSectionFromCurrent(setlistId: String) {
+        controller.addSectionFromCurrent(setlistId: setlistId)
+        refreshFromState()
+    }
+
+    func removeSection(setlistId: String, sectionId: String) {
+        controller.removeSection(setlistId: setlistId, sectionId: sectionId)
+        refreshFromState()
+    }
+
+    func moveSection(setlistId: String, from: Int, to: Int) {
+        controller.moveSection(setlistId: setlistId, from: Int32(from), to: Int32(to))
+        refreshFromState()
+    }
+
+    func loadSetlist(id: String) {
+        if let setlist = ui?.setlists.first(where: { $0.id == id }) {
+            controller.loadSetlist(setlist: setlist)
+        }
+        refreshFromState()
+    }
+
+    func advanceSection() {
+        controller.advanceSection()
+        refreshFromState()
+    }
+
+    func exitSetlist() {
+        controller.exitSetlist()
+        refreshFromState()
+    }
+
+    func setSectionBars(setlistId: String, sectionId: String, bars: Int) {
+        guard let current = rawSection(setlistId: setlistId, sectionId: sectionId) else { return }
+        let nextBars = Int32(max(0, bars))
+        let next = SetSection(
+            id: current.id,
+            label: current.label,
+            config: current.config,
+            bars: nextBars,
+            autoAdvance: nextBars == 0 ? false : current.autoAdvance
+        )
+        controller.updateSection(setlistId: setlistId, section: next)
+        refreshFromState()
+    }
+
+    func setSectionAutoAdvance(setlistId: String, sectionId: String, auto: Bool) {
+        guard let current = rawSection(setlistId: setlistId, sectionId: sectionId) else { return }
+        let next = SetSection(
+            id: current.id,
+            label: current.label,
+            config: current.config,
+            bars: current.bars,
+            autoAdvance: auto
+        )
+        controller.updateSection(setlistId: setlistId, section: next)
+        refreshFromState()
+    }
+
+    private func rawSection(setlistId: String, sectionId: String) -> SetSection? {
+        ui?.setlists.first(where: { $0.id == setlistId })?
+            .sections.first(where: { $0.id == sectionId })
+    }
+
     func startListen() {
         if isPlaying { return }
         switch AVAudioSession.sharedInstance().recordPermission {
@@ -557,6 +655,12 @@ final class MetronomeBridge: ObservableObject {
         let nextActiveSongId = s.activeSongId
         if activeSongId != nextActiveSongId { activeSongId = nextActiveSongId }
 
+        let nextActiveSetlistId = s.activeSetlistId
+        if activeSetlistId != nextActiveSetlistId { activeSetlistId = nextActiveSetlistId }
+        assignIfChanged(&activeSectionIndex, Int(s.activeSectionIndex))
+        assignIfChanged(&sectionBar, Int(s.sectionBar))
+        assignIfChanged(&inSetMode, s.inSetMode)
+
         let nextAccents: [BeatAccentLevel] = s.beatAccents.map { accent in
             switch accent.name {
             case "STRONG": return .strong
@@ -576,6 +680,31 @@ final class MetronomeBridge: ObservableObject {
             return SongRow(id: song.id, name: song.name, detail: detail)
         }
         if nextSongs != songs { songs = nextSongs }
+
+        let nextSetlists: [SetlistRow] = s.setlists.map { setlist in
+            let sections: [SectionRow] = setlist.sections.map { section in
+                let summary: String
+                if let label = section.label, !label.isEmpty {
+                    summary = label
+                } else {
+                    let cfg = section.config
+                    summary = "\(Int(cfg.bpm)) · \(cfg.timeSignature.label) · \(cfg.subdivision.label)"
+                }
+                return SectionRow(
+                    id: section.id,
+                    summary: summary,
+                    bars: Int(section.bars),
+                    autoAdvance: section.autoAdvance
+                )
+            }
+            return SetlistRow(
+                id: setlist.id,
+                name: setlist.name,
+                sectionCount: sections.count,
+                sections: sections
+            )
+        }
+        if nextSetlists != setlists { setlists = nextSetlists }
 
         if !optionsLoaded {
             let subs = Subdivision.values()

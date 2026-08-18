@@ -8,14 +8,19 @@ struct MetronomeView: View {
 
     @State private var practiceExpanded = false
     @State private var songsExpanded = false
+    @State private var setlistsExpanded = false
+    @State private var editingSetlistId: String?
     @State private var bpmScale: CGFloat = 1
     @State private var bpmDragAccum: CGFloat = 0
     @State private var bpmDragLastY: CGFloat = 0
     @State private var showSaveDialog = false
+    @State private var showNewSetlistDialog = false
     @State private var showSettings = false
     @State private var openMeters = false
     @State private var saveName = ""
+    @State private var newSetlistName = ""
     @State private var renamingSong: MetronomeBridge.SongRow?
+    @State private var renamingSetlist: MetronomeBridge.SetlistRow?
     @State private var renameText = ""
 
     private var isWide: Bool {
@@ -66,6 +71,9 @@ struct MetronomeView: View {
                 bridge.onAppBackground()
             }
         }
+        .onChange(of: bridge.inSetMode) { active in
+            if active { setlistsExpanded = true }
+        }
         .alert("Save song", isPresented: $showSaveDialog) {
             TextField("Name", text: $saveName)
             Button("Cancel", role: .cancel) {}
@@ -89,6 +97,31 @@ struct MetronomeView: View {
                     bridge.renameSong(id: song.id, name: renameText)
                 }
                 renamingSong = nil
+            }
+        }
+        .alert("New setlist", isPresented: $showNewSetlistDialog) {
+            TextField("Name", text: $newSetlistName)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                bridge.createSetlist(name: newSetlistName)
+            }
+        } message: {
+            Text("Save an ordered set of songs.")
+        }
+        .alert(
+            "Rename setlist",
+            isPresented: Binding(
+                get: { renamingSetlist != nil },
+                set: { if !$0 { renamingSetlist = nil } }
+            )
+        ) {
+            TextField("Name", text: $renameText)
+            Button("Cancel", role: .cancel) { renamingSetlist = nil }
+            Button("Save") {
+                if let setlist = renamingSetlist {
+                    bridge.renameSetlist(id: setlist.id, name: renameText)
+                }
+                renamingSetlist = nil
             }
         }
         .sheet(isPresented: $showSettings, onDismiss: { openMeters = false }) {
@@ -152,6 +185,7 @@ struct MetronomeView: View {
                         .frame(height: 18)
                     practiceStrip
                         .padding(.top, gap)
+                    setlistStrip
                     listenStrip
                         .padding(.top, gap)
                     if let debug = bridge.listenDebug {
@@ -172,6 +206,10 @@ struct MetronomeView: View {
                     .padding(.top, isWide ? 22 : 14)
                     expandable("SONGS", summary: bridge.songs.isEmpty ? "bookmark to save" : "\(bridge.songs.count) saved", expanded: $songsExpanded) {
                         songsBody
+                    }
+                    .padding(.top, gap)
+                    expandable("SETLISTS", summary: setlistSummary, expanded: $setlistsExpanded) {
+                        setlistsBody
                     }
                     .padding(.top, gap)
                     Spacer(minLength: isWide ? 24 : 16)
@@ -202,6 +240,7 @@ struct MetronomeView: View {
                             .foregroundStyle(palette.phaseColor(bridge.sessionPhase))
                             .frame(height: 18)
                         practiceStrip
+                        setlistStrip
                     }
                     Spacer(minLength: 0)
                 }
@@ -224,6 +263,9 @@ struct MetronomeView: View {
                         }
                         expandable("SONGS", summary: bridge.songs.isEmpty ? "bookmark to save" : "\(bridge.songs.count) saved", expanded: $songsExpanded) {
                             songsBody
+                        }
+                        expandable("SETLISTS", summary: setlistSummary, expanded: $setlistsExpanded) {
+                            setlistsBody
                         }
                         Spacer(minLength: 8)
                     }
@@ -389,8 +431,8 @@ struct MetronomeView: View {
 
     @ViewBuilder
     private var practiceStrip: some View {
-        let showMute = bridge.muteSilentBars > 0
-        let showTrainer = bridge.trainerEnabled
+        let showMute = !bridge.inSetMode && bridge.muteSilentBars > 0
+        let showTrainer = !bridge.inSetMode && bridge.trainerEnabled
         if showMute || showTrainer {
             VStack(alignment: .leading, spacing: 8) {
                 if showMute {
@@ -587,49 +629,48 @@ struct MetronomeView: View {
                 }
             }
 
-            Text("MUTE BARS")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(palette.ash)
-            FlowLayout {
-                ForEach(bridge.muteOptions, id: \.self) { opt in
-                    ChoiceChip(label: opt, selected: opt == bridge.muteLabel) {
-                        bridge.selectMutePattern(opt)
+            let setLocked = bridge.inSetMode
+            Group {
+                Text(setLocked ? "MUTE BARS · SET MODE" : "MUTE BARS")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(palette.ash)
+                FlowLayout {
+                    ForEach(bridge.muteOptions, id: \.self) { opt in
+                        ChoiceChip(label: opt, selected: opt == bridge.muteLabel) {
+                            if !setLocked { bridge.selectMutePattern(opt) }
+                        }
+                    }
+                }
+
+                Text(setLocked ? "TRAINER · SET MODE" : "TRAINER")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(palette.ash)
+                FlowLayout {
+                    ChoiceChip(
+                        label: bridge.trainerEnabled ? "On" : "Off",
+                        selected: bridge.trainerEnabled
+                    ) { if !setLocked { bridge.toggleTrainer() } }
+                    if bridge.trainerEnabled {
+                        ChoiceChip(
+                            label: "→\(bridge.trainerTarget)",
+                            selected: false
+                        ) { if !setLocked { bridge.cycleTrainerTarget() } }
+                        ChoiceChip(
+                            label: "±\(bridge.trainerStep)",
+                            selected: false
+                        ) { if !setLocked { bridge.cycleTrainerStep() } }
+                        ChoiceChip(
+                            label: "each \(bridge.trainerEveryBars)",
+                            selected: false
+                        ) { if !setLocked { bridge.cycleTrainerEveryBars() } }
+                        ChoiceChip(
+                            label: bridge.trainerAutoStop ? "stop" : "hold",
+                            selected: bridge.trainerAutoStop
+                        ) { if !setLocked { bridge.toggleTrainerAutoStop() } }
                     }
                 }
             }
-
-            Text("TRAINER")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(palette.ash)
-            FlowLayout {
-                ChoiceChip(
-                    label: bridge.trainerEnabled ? "On" : "Off",
-                    selected: bridge.trainerEnabled,
-                    action: bridge.toggleTrainer
-                )
-                if bridge.trainerEnabled {
-                    ChoiceChip(
-                        label: "→\(bridge.trainerTarget)",
-                        selected: false,
-                        action: bridge.cycleTrainerTarget
-                    )
-                    ChoiceChip(
-                        label: "±\(bridge.trainerStep)",
-                        selected: false,
-                        action: bridge.cycleTrainerStep
-                    )
-                    ChoiceChip(
-                        label: "each \(bridge.trainerEveryBars)",
-                        selected: false,
-                        action: bridge.cycleTrainerEveryBars
-                    )
-                    ChoiceChip(
-                        label: bridge.trainerAutoStop ? "stop" : "hold",
-                        selected: bridge.trainerAutoStop,
-                        action: bridge.toggleTrainerAutoStop
-                    )
-                }
-            }
+            .opacity(setLocked ? 0.38 : 1)
         }
     }
 
@@ -689,6 +730,251 @@ struct MetronomeView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var setlistStrip: some View {
+        if bridge.inSetMode, let setlist = bridge.setlists.first(where: { $0.id == bridge.activeSetlistId }) {
+            let section = setlist.sections.indices.contains(bridge.activeSectionIndex)
+                ? setlist.sections[bridge.activeSectionIndex]
+                : nil
+            let count = setlist.sectionCount
+            let indexLabel = "\(bridge.activeSectionIndex + 1)/\(count)"
+            let sectionTitle = section?.summary ?? setlist.name
+            let bars = section?.bars ?? 0
+            let progress = bars > 0
+                ? min(1, max(0, Float(bridge.sectionBar) / Float(bars)))
+                : 0
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(setlist.name.uppercased())
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(palette.emberSoft)
+                    .lineLimit(1)
+                Text("section \(indexLabel) · \(sectionTitle)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(palette.ash)
+                    .lineLimit(1)
+                if bars > 0 {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(palette.inkLine)
+                            Capsule()
+                                .fill(palette.ember)
+                                .frame(width: geo.size.width * CGFloat(progress))
+                        }
+                    }
+                    .frame(height: 6)
+                    Text("\(min(max(0, bridge.sectionBar), bars)) / \(bars)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(palette.ash)
+                }
+                HStack(spacing: 8) {
+                    ChoiceChip(label: "Next", selected: false, action: bridge.advanceSection)
+                    ChoiceChip(label: "Exit", selected: false, action: bridge.exitSetlist)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 4)
+        }
+    }
+
+    private var setlistsBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let editing = bridge.setlists.first(where: { $0.id == editingSetlistId }) {
+                ChoiceChip(label: "All setlists", selected: false) {
+                    editingSetlistId = nil
+                }
+                Text(editing.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(palette.bone)
+                    .lineLimit(1)
+                ChoiceChip(label: "Add current as section", selected: false) {
+                    bridge.addSectionFromCurrent(setlistId: editing.id)
+                }
+                if editing.sections.isEmpty {
+                    Text("Add the current tempo, meter, and tone as a section. Open-ended until you set a bar count.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(palette.ash)
+                } else {
+                    ForEach(Array(editing.sections.enumerated()), id: \.element.id) { index, section in
+                        sectionEditorRow(
+                            setlistId: editing.id,
+                            section: section,
+                            selected: bridge.inSetMode
+                                && bridge.activeSetlistId == editing.id
+                                && bridge.activeSectionIndex == index,
+                            isFirst: index == 0,
+                            isLast: index == editing.sections.count - 1,
+                            index: index
+                        )
+                    }
+                }
+            } else {
+                ChoiceChip(label: "New setlist", selected: false) {
+                    newSetlistName = "Set \(bridge.setlists.count + 1)"
+                    showNewSetlistDialog = true
+                }
+                if bridge.setlists.isEmpty {
+                    Text("Save an ordered set of songs. Tap to load, long-press to rename.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(palette.ash)
+                } else {
+                    ForEach(bridge.setlists) { setlist in
+                        setlistRow(setlist)
+                    }
+                }
+            }
+        }
+    }
+
+    private func setlistRow(_ setlist: MetronomeBridge.SetlistRow) -> some View {
+        let selected = bridge.activeSetlistId == setlist.id
+        let countLabel = setlist.sectionCount == 1 ? "1 section" : "\(setlist.sectionCount) sections"
+        return HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(setlist.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(palette.bone)
+                    .lineLimit(1)
+                Text(countLabel)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(palette.ash)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                bridge.loadSetlist(id: setlist.id)
+                editingSetlistId = setlist.id
+                setlistsExpanded = true
+            }
+            .onLongPressGesture {
+                renamingSetlist = setlist
+                renameText = setlist.name
+            }
+            Button {
+                bridge.deleteSetlist(id: setlist.id)
+                if editingSetlistId == setlist.id { editingSetlistId = nil }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(palette.ash)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(selected ? palette.ember.opacity(0.14) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    selected ? palette.ember.opacity(0.55) : palette.inkLine,
+                    lineWidth: 1
+                )
+        )
+    }
+
+    private func sectionEditorRow(
+        setlistId: String,
+        section: MetronomeBridge.SectionRow,
+        selected: Bool,
+        isFirst: Bool,
+        isLast: Bool,
+        index: Int
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(section.summary)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(palette.bone)
+                        .lineLimit(1)
+                    Text(sectionLengthLabel(section))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(palette.ash)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    if !isFirst { bridge.moveSection(setlistId: setlistId, from: index, to: index - 1) }
+                } label: {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(isFirst ? palette.inkLine : palette.ash)
+                        .frame(width: 28, height: 32)
+                }
+                .buttonStyle(.plain)
+                .disabled(isFirst)
+                Button {
+                    if !isLast { bridge.moveSection(setlistId: setlistId, from: index, to: index + 1) }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(isLast ? palette.inkLine : palette.ash)
+                        .frame(width: 28, height: 32)
+                }
+                .buttonStyle(.plain)
+                .disabled(isLast)
+                Button {
+                    bridge.removeSection(setlistId: setlistId, sectionId: section.id)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(palette.ash)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+            }
+            Text("BARS")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(palette.ash)
+            FlowLayout {
+                ForEach([0, 2, 4, 8, 16, 32], id: \.self) { bars in
+                    ChoiceChip(
+                        label: bars == 0 ? "Open" : "\(bars)",
+                        selected: section.bars == bars
+                    ) {
+                        bridge.setSectionBars(setlistId: setlistId, sectionId: section.id, bars: bars)
+                    }
+                }
+            }
+            if section.bars > 0 {
+                ChoiceChip(
+                    label: "Auto",
+                    selected: section.autoAdvance
+                ) {
+                    bridge.setSectionAutoAdvance(
+                        setlistId: setlistId,
+                        sectionId: section.id,
+                        auto: !section.autoAdvance
+                    )
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(selected ? palette.ember.opacity(0.14) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    selected ? palette.ember.opacity(0.55) : palette.inkLine,
+                    lineWidth: 1
+                )
+        )
+    }
+
+    private func sectionLengthLabel(_ section: MetronomeBridge.SectionRow) -> String {
+        if section.bars <= 0 { return "open-ended" }
+        if section.autoAdvance { return "\(section.bars) bars · auto" }
+        return "\(section.bars) bars"
     }
 
     private func transportDock(landscape: Bool, padding: CGFloat) -> some View {
@@ -789,6 +1075,12 @@ struct MetronomeView: View {
     }
 
     private var secondaryLabel: String {
+        if bridge.inSetMode {
+            var parts = [MetromTheme.tempoMarking(bridge.bpm)]
+            if bridge.groupTempo { parts.append("dotted") }
+            if bridge.swingLabel != "Off" { parts.append("swing \(bridge.swingLabel.lowercased())") }
+            return parts.joined(separator: " · ")
+        }
         if bridge.trainerEnabled && bridge.isPlaying {
             let sign = bridge.trainerTarget < bridge.bpm ? "−" : "+"
             return "TRAIN \(bridge.trainerStartBpm)→\(bridge.trainerTarget) · \(sign)\(bridge.trainerStep)/\(bridge.trainerEveryBars)"
@@ -800,11 +1092,25 @@ struct MetronomeView: View {
     }
 
     private var practiceSummary: String {
+        if bridge.inSetMode {
+            if let set = bridge.setlists.first(where: { $0.id == bridge.activeSetlistId }) {
+                return "set · \(set.name)"
+            }
+            return "set mode"
+        }
         var bits: [String] = []
         bits.append(bridge.countInBars == 0 ? "no count-in" : "count-in \(bridge.countInBars)")
         bits.append(bridge.muteSilentBars == 0 ? "mute off" : "mute \(bridge.muteLabel)")
         if bridge.trainerEnabled { bits.append("train →\(bridge.trainerTarget)") }
         return bits.joined(separator: " · ")
+    }
+
+    private var setlistSummary: String {
+        if bridge.inSetMode, let set = bridge.setlists.first(where: { $0.id == bridge.activeSetlistId }) {
+            let index = bridge.activeSectionIndex + 1
+            return "\(set.name) · \(index)/\(set.sectionCount)"
+        }
+        return bridge.setlists.isEmpty ? "build a set" : "\(bridge.setlists.count) saved"
     }
 
     private func labeledChips(
