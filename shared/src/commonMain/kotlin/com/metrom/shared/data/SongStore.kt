@@ -59,7 +59,7 @@ data class SongPreset(
 }
 
 @Serializable
-private data class SongDto(
+internal data class SongDto(
     val id: String,
     val name: String,
     val bpm: Int,
@@ -96,44 +96,44 @@ class SongStore(private val prefs: PrefsStore) {
         prefs.putString(KEY, json.encodeToString(dtos))
     }
 
-    private fun SongPreset.toDto() = SongDto(
-        id = id,
-        name = name,
-        bpm = bpm,
-        beats = timeSignature.beats,
-        noteValue = timeSignature.noteValue,
-        subdivision = subdivision.ordinal,
-        toneId = tone.id,
-        accentNote = accentNote.ordinal,
-        restNote = restNote.ordinal,
-        beatAccents = BeatAccent.encode(beatAccents),
-        swing = swing.ordinal,
-        groupTempo = groupTempo,
-        countInBars = countInBars,
-        mutePlayBars = mutePattern.playBars,
-        muteSilentBars = mutePattern.silentBars,
-    )
-
-    private fun SongDto.toPreset(): SongPreset? {
-        val tone = MetronomeTone.fromId(toneId) ?: return null
-        return SongPreset(
-            id = id,
-            name = name,
-            bpm = bpm,
-            timeSignature = TimeSignature(beats, noteValue),
-            subdivision = Subdivision.entries.getOrElse(subdivision) { Subdivision.QUARTER },
-            tone = tone,
-            accentNote = AccentNote.entries.getOrElse(accentNote) { AccentNote.DEFAULT },
-            restNote = AccentNote.entries.getOrElse(restNote) { AccentNote.OFF },
-            beatAccents = BeatAccent.decode(beatAccents, beats, noteValue),
-            swing = SwingFeel.entries.getOrElse(swing) { SwingFeel.OFF },
-            groupTempo = groupTempo,
-            countInBars = countInBars,
-            mutePattern = MutePattern(mutePlayBars, muteSilentBars),
-        )
-    }
-
     companion object {
         private const val KEY = "songs_json"
     }
+}
+
+internal fun SongPreset.toDto() = SongDto(
+    id = id,
+    name = name,
+    bpm = bpm,
+    beats = timeSignature.beats,
+    noteValue = timeSignature.noteValue,
+    subdivision = subdivision.ordinal,
+    toneId = tone.id,
+    accentNote = accentNote.ordinal,
+    restNote = restNote.ordinal,
+    beatAccents = BeatAccent.encode(beatAccents),
+    swing = swing.ordinal,
+    groupTempo = groupTempo,
+    countInBars = countInBars,
+    mutePlayBars = mutePattern.playBars,
+    muteSilentBars = mutePattern.silentBars,
+)
+
+internal fun SongDto.toPreset(): SongPreset? {
+    val tone = MetronomeTone.fromId(toneId) ?: return null
+    return SongPreset(
+        id = id,
+        name = name,
+        bpm = bpm,
+        timeSignature = TimeSignature(beats, noteValue),
+        subdivision = Subdivision.entries.getOrElse(subdivision) { Subdivision.QUARTER },
+        tone = tone,
+        accentNote = AccentNote.entries.getOrElse(accentNote) { AccentNote.DEFAULT },
+        restNote = AccentNote.entries.getOrElse(restNote) { AccentNote.OFF },
+        beatAccents = BeatAccent.decode(beatAccents, beats, noteValue),
+        swing = SwingFeel.entries.getOrElse(swing) { SwingFeel.OFF },
+        groupTempo = groupTempo,
+        countInBars = countInBars,
+        mutePattern = MutePattern(mutePlayBars, muteSilentBars),
+    )
 }

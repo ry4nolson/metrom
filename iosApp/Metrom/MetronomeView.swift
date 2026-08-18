@@ -130,9 +130,12 @@ struct MetronomeView: View {
     private func portraitLayout(padding: CGFloat) -> some View {
         let gap = sectionGap(landscape: false)
         return VStack(spacing: 0) {
+            header(landscape: false)
+                .padding(.horizontal, padding)
+                .padding(.top, isWide ? 16 : 8)
+
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    header(landscape: false)
                     beatRail(landscape: false)
                         .padding(.top, gap)
                     Text("tap beats · strong / normal / mute")
@@ -171,10 +174,9 @@ struct MetronomeView: View {
                         songsBody
                     }
                     .padding(.top, gap)
-                    Spacer(minLength: isWide ? 160 : 120)
+                    Spacer(minLength: isWide ? 24 : 16)
                 }
                 .padding(.horizontal, padding)
-                .padding(.top, isWide ? 16 : 8)
                 .frame(maxWidth: .infinity)
             }
 

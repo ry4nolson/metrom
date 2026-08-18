@@ -255,46 +255,53 @@ private fun PortraitBody(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = horizontalPad)
-            .verticalScroll(rememberScrollState()),
+            .padding(horizontal = horizontalPad),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         TopBar(state, viewModel, onOpenSettings)
         Spacer(modifier = Modifier.height(10.dp))
-        BeatRail(
-            state = state,
-            onCycle = viewModel::cycleBeatAccent,
-            onReset = viewModel::resetBeatAccents
-        )
-        Text(
-            text = "tap beats · strong / normal / mute",
-            style = MaterialTheme.typography.labelMedium,
-            color = Ash,
+        Column(
             modifier = Modifier
-                .padding(top = 6.dp)
-                .height(16.dp),
-            maxLines = 1
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        PhaseBanner(state)
-        TempoHero(state = state, onNudge = viewModel::nudgeBpm)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = secondaryLabel(state),
-            style = MaterialTheme.typography.labelMedium,
-            color = phaseColor(state.sessionPhase),
-            modifier = Modifier.height(18.dp),
-            maxLines = 1
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        SettingsColumn(
-            state = state,
-            detectState = detectState,
-            detectDebug = detectDebug,
-            viewModel = viewModel,
-            onOpenCustomMeters = onOpenCustomMeters
-        )
-        Spacer(modifier = Modifier.height(24.dp))
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            BeatRail(
+                state = state,
+                onCycle = viewModel::cycleBeatAccent,
+                onReset = viewModel::resetBeatAccents
+            )
+            Text(
+                text = "tap beats · strong / normal / mute",
+                style = MaterialTheme.typography.labelMedium,
+                color = Ash,
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .height(16.dp),
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            PhaseBanner(state)
+            TempoHero(state = state, onNudge = viewModel::nudgeBpm)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = secondaryLabel(state),
+                style = MaterialTheme.typography.labelMedium,
+                color = phaseColor(state.sessionPhase),
+                modifier = Modifier.height(18.dp),
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            SettingsColumn(
+                state = state,
+                detectState = detectState,
+                detectDebug = detectDebug,
+                viewModel = viewModel,
+                onOpenCustomMeters = onOpenCustomMeters
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
     }
 }
 
