@@ -3,9 +3,8 @@ package com.metrom.shared.practice
 import com.metrom.shared.audio.SampleToneCache
 import com.metrom.shared.data.SetSection
 import com.metrom.shared.data.Setlist
-import com.metrom.shared.data.SetlistStore
 import com.metrom.shared.data.SongPreset
-import com.metrom.shared.data.SongStore
+import com.metrom.shared.db.MetromDatabase
 import com.metrom.shared.detect.DetectDebug
 import com.metrom.shared.detect.DetectState
 import com.metrom.shared.detect.FailReason
@@ -87,12 +86,12 @@ class MetronomeController(
     private val engine: MetronomeEngine,
     private val runner: EngineRunner,
     private val micCapture: MicCapture?,
+    private val database: MetromDatabase,
     private val canStart: () -> Boolean = { true },
     private val onPlaybackChanged: (playing: Boolean, bpm: Int, subtitle: String) -> Unit = { _, _, _ -> },
     private val onTrainerAutoStopped: () -> Unit = {},
 ) {
-    private val songStore = SongStore(prefs)
-    private val setlistStore = SetlistStore(prefs)
+    private val library = LibraryPersistence(database)
     private val tapTimes = ArrayDeque<Long>()
     private var lastBeatIndex = -1
     private var barIndex = 0
@@ -488,6 +487,7 @@ class MetronomeController(
         prefs.putBoolean("trainerAutoStop", enabled)
     }
 
+    // Public names stay "song" until 2b-ii; these persist as library Section rows.
     fun saveCurrentSong(name: String? = null) {
         val s = _state.value
         val existing = s.songs.firstOrNull {
@@ -516,9 +516,8 @@ class MetronomeController(
             countInBars = s.countInBars,
             mutePattern = s.mutePattern,
         )
-        val next = s.songs + song
-        songStore.saveAll(next)
-        _state.update { it.copy(songs = next, activeSongId = song.id, tapHint = "SAVED · ${song.name}") }
+        library.upsertSongPreset(song)
+        reloadLibrary { it.copy(activeSongId = song.id, tapHint = "SAVED · ${song.name}") }
     }
 
     fun loadSong(song: SongPreset) {
@@ -527,44 +526,40 @@ class MetronomeController(
     }
 
     fun deleteSong(song: SongPreset) {
-        val next = _state.value.songs.filterNot { it.id == song.id }
-        songStore.saveAll(next)
-        _state.update {
-            it.copy(songs = next, activeSongId = if (it.activeSongId == song.id) null else it.activeSongId)
+        library.deleteSongPreset(song.id)
+        reloadLibrary {
+            it.copy(activeSongId = if (it.activeSongId == song.id) null else it.activeSongId)
         }
     }
 
     fun renameSong(song: SongPreset, name: String) {
         val trimmed = name.trim().ifEmpty { return }
-        val next = _state.value.songs.map { if (it.id == song.id) it.copy(name = trimmed) else it }
-        songStore.saveAll(next)
-        _state.update { it.copy(songs = next, tapHint = "RENAMED") }
+        library.upsertSongPreset(song.copy(name = trimmed))
+        reloadLibrary { it.copy(tapHint = "RENAMED") }
     }
 
     fun updateActiveSong() {
         val s = _state.value
         val id = s.activeSongId ?: return
-        val next = s.songs.map { song ->
-            if (song.id != id) song
-            else song.copy(
-                bpm = s.bpm,
-                timeSignature = s.timeSignature,
-                subdivision = s.subdivision,
-                tone = s.tone,
-                accentNote = s.accentNote,
-                restNote = s.restNote,
-                beatAccents = s.beatAccents,
-                swing = s.swing,
-                groupTempo = s.groupTempo,
-                countInBars = s.countInBars,
-                mutePattern = s.mutePattern,
-                name = if (song.name.contains("·")) {
-                    SongPreset.autoName(s.bpm, s.timeSignature, s.subdivision)
-                } else song.name,
-            )
-        }
-        songStore.saveAll(next)
-        _state.update { it.copy(songs = next, tapHint = "UPDATED") }
+        val current = s.songs.firstOrNull { it.id == id } ?: return
+        val updated = current.copy(
+            bpm = s.bpm,
+            timeSignature = s.timeSignature,
+            subdivision = s.subdivision,
+            tone = s.tone,
+            accentNote = s.accentNote,
+            restNote = s.restNote,
+            beatAccents = s.beatAccents,
+            swing = s.swing,
+            groupTempo = s.groupTempo,
+            countInBars = s.countInBars,
+            mutePattern = s.mutePattern,
+            name = if (current.name.contains("·")) {
+                SongPreset.autoName(s.bpm, s.timeSignature, s.subdivision)
+            } else current.name,
+        )
+        library.upsertSongPreset(updated)
+        reloadLibrary { it.copy(tapHint = "UPDATED") }
     }
 
     fun createSetlist(name: String) {
@@ -1056,8 +1051,8 @@ class MetronomeController(
         val storedTone = MetronomeTone.fromId(prefs.getString(PREF_TONE_ID).orEmpty())
             ?.takeIf { it in toneOptions }
             ?: MetronomeTone.DEFAULT
-        val songs = songStore.load().dedupeSongs()
-        val setlists = setlistStore.load()
+        val songs = library.loadSongPresets().dedupeSongs()
+        val setlists = library.loadUiSetlists()
         return MetronomeUiState(
             bpm = prefs.getInt("bpm", 120),
             volume = prefs.getFloat("volume", 0.9f).coerceIn(0f, 1f),
@@ -1181,8 +1176,14 @@ class MetronomeController(
     }
 
     private fun persistSetlists(next: List<Setlist>) {
-        setlistStore.saveAll(next)
-        _state.update { it.copy(setlists = next) }
+        library.replaceSetlists(next)
+        reloadLibrary()
+    }
+
+    private fun reloadLibrary(transform: (MetronomeUiState) -> MetronomeUiState = { it }) {
+        val songs = library.loadSongPresets().dedupeSongs()
+        val setlists = library.loadUiSetlists()
+        _state.update { transform(it.copy(songs = songs, setlists = setlists)) }
     }
 
     private fun snapshotPreset(s: MetronomeUiState): SongPreset = SongPreset(

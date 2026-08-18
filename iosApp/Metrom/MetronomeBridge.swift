@@ -170,6 +170,7 @@ final class MetronomeBridge: ObservableObject {
             engine: engine,
             runner: runner,
             micCapture: mic,
+            database: metromDatabase,
             canStart: {
                 KotlinBoolean(bool: audioSink.activatePlaybackSession())
             },

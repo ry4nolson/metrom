@@ -1,10 +1,12 @@
 package com.metrom.shared.practice
 
 import com.metrom.shared.audio.SampleToneCache
-import com.metrom.shared.data.SetlistStore
 import com.metrom.shared.data.SetSection
 import com.metrom.shared.data.Setlist
 import com.metrom.shared.data.SongPreset
+import com.metrom.shared.db.MetromDatabase
+import com.metrom.shared.db.openMetromDatabase
+import com.metrom.shared.library.createTestSqlDriver
 import com.metrom.shared.domain.AccentNote
 import com.metrom.shared.domain.BeatAccent
 import com.metrom.shared.domain.BeatEvent
@@ -134,7 +136,7 @@ class MetronomeControllerSetlistTest {
         assertEquals(2, stored[1].config.countInBars)
         assertEquals("Bridge", stored[1].label)
         assertEquals(a, stored[0].id)
-        val reloaded = SetlistStore(h.prefs).load().single()
+        val reloaded = reloadSetlist(h)
         assertEquals(188, reloaded.sections[1].config.bpm)
         assertEquals(TimeSignature(5, 4), reloaded.sections[1].config.timeSignature)
         assertEquals("Bridge", reloaded.sections[1].label)
@@ -194,7 +196,7 @@ class MetronomeControllerSetlistTest {
         assertEquals(0, h.controller.state.value.setlists.single().sections[0].bars)
         h.controller.setSectionBars(setlistId, sectionId, 5000)
         assertEquals(999, h.controller.state.value.setlists.single().sections[0].bars)
-        val reloaded = SetlistStore(h.prefs).load().single().sections[0]
+        val reloaded = reloadSetlist(h).sections[0]
         assertEquals(999, reloaded.bars)
     }
 
@@ -299,11 +301,24 @@ class MetronomeControllerSetlistTest {
 
 private class Harness(
     val prefs: MemoryPrefs,
+    val database: MetromDatabase,
     val controller: MetronomeController,
 )
 
 private fun harness(): Harness {
     val prefs = MemoryPrefs()
+    val database = openMetromDatabase(createTestSqlDriver())
+    return Harness(
+        prefs = prefs,
+        database = database,
+        controller = makeController(prefs, database),
+    )
+}
+
+private fun reloadSetlist(h: Harness): Setlist =
+    makeController(h.prefs, h.database).state.value.setlists.single()
+
+private fun makeController(prefs: PrefsStore, database: MetromDatabase): MetronomeController {
     val cache = SampleToneCache(EmptyAssets())
     val engine = MetronomeEngine(
         sink = FakeSink(),
@@ -311,16 +326,14 @@ private fun harness(): Harness {
         latencyPad = ZeroPad(),
         sampleCache = cache,
     )
-    return Harness(
+    return MetronomeController(
         prefs = prefs,
-        controller = MetronomeController(
-            prefs = prefs,
-            haptics = NoHaptics(),
-            sampleCache = cache,
-            engine = engine,
-            runner = FakeRunner(),
-            micCapture = null,
-        ),
+        haptics = NoHaptics(),
+        sampleCache = cache,
+        engine = engine,
+        runner = FakeRunner(),
+        micCapture = null,
+        database = database,
     )
 }
 
