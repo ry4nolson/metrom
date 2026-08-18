@@ -35,8 +35,8 @@ class ColorThemeTest {
         val store = ColorThemeStore(MemoryPrefs())
         store.select("ice")
         assertEquals(ColorTheme.ICE, store.load())
-        store.select("gold")
-        assertEquals(ColorTheme.GOLD.id, store.load().id)
+        store.select("forest")
+        assertEquals(ColorTheme.FOREST.id, store.load().id)
     }
 
     @Test
@@ -46,9 +46,9 @@ class ColorThemeTest {
 
     @Test
     fun encodeRoundTrip() {
-        val encoded = ColorTheme.encode(ColorTheme.VIOLET)
+        val encoded = ColorTheme.encode(ColorTheme.ICE)
         val decoded = ColorTheme.decode(encoded)
-        assertEquals(ColorTheme.VIOLET, decoded)
+        assertEquals(ColorTheme.ICE, decoded)
     }
 
     @Test
@@ -110,19 +110,19 @@ class ColorThemeTest {
         assertEquals("Cool ice", first.label)
         assertEquals(ColorTheme.ICE.ember, store.load().ember)
         assertEquals(1, store.saved().size)
-        store.saveNamed("Cool ice", ColorTheme.GOLD)
+        store.saveNamed("Cool ice", ColorTheme.FOREST)
         assertEquals(1, store.saved().size)
-        assertEquals(ColorTheme.GOLD.ember, store.load().ember)
+        assertEquals(ColorTheme.FOREST.ember, store.load().ember)
         store.select("ember")
         store.select(first.id)
-        assertEquals(ColorTheme.GOLD.ember, store.load().ember)
+        assertEquals(ColorTheme.FOREST.ember, store.load().ember)
     }
 
     @Test
     fun deleteSavedFallsBackToCustom() {
         val store = ColorThemeStore(MemoryPrefs())
         store.saveCustom(ColorTheme.FOREST)
-        val saved = store.saveNamed("Keep", ColorTheme.ROSE)
+        val saved = store.saveNamed("Keep", ColorTheme.BLOOM)
         store.deleteSaved(saved.id)
         assertTrue(store.saved().isEmpty())
         assertEquals(ColorTheme.CUSTOM_ID, store.selectedId())
