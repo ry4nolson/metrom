@@ -16,7 +16,7 @@ actual fun createMetromSqlDriver(): SqlDriver {
     return AndroidSqliteDriver(
         schema = MetromDatabase.Schema,
         context = appContext,
-        name = "metrom.db",
+        name = "metrom-v2.db",
         callback = object : AndroidSqliteDriver.Callback(MetromDatabase.Schema) {
             override fun onConfigure(db: SupportSQLiteDatabase) {
                 db.setForeignKeyConstraintsEnabled(true)

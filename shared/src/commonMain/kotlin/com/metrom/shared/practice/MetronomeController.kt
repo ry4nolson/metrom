@@ -1,10 +1,11 @@
 package com.metrom.shared.practice
 
 import com.metrom.shared.audio.SampleToneCache
-import com.metrom.shared.data.SetSection
-import com.metrom.shared.data.Setlist
-import com.metrom.shared.data.SongPreset
 import com.metrom.shared.db.MetromDatabase
+import com.metrom.shared.library.Section
+import com.metrom.shared.library.Setlist
+import com.metrom.shared.library.Song
+import com.metrom.shared.randomUuid
 import com.metrom.shared.detect.DetectDebug
 import com.metrom.shared.detect.DetectState
 import com.metrom.shared.detect.FailReason
@@ -61,8 +62,10 @@ data class MetronomeUiState(
     val sessionPhase: SessionPhase = SessionPhase.IDLE,
     val sessionBar: Int = 0,
     val statusLine: String = "READY",
-    val songs: List<SongPreset> = emptyList(),
-    val activeSongId: String? = null,
+    val songs: List<Song> = emptyList(),
+    val sections: List<Section> = emptyList(),
+    val savedSections: List<Section> = emptyList(),
+    val activeSavedSectionId: String? = null,
     val setlists: List<Setlist> = emptyList(),
     val activeSetlistId: String? = null,
     val activeSectionIndex: Int = -1,
@@ -72,6 +75,22 @@ data class MetronomeUiState(
         get() = !BeatAccent.isDefault(beatAccents, timeSignature.beats, timeSignature.noteValue)
     val inSetMode: Boolean
         get() = activeSetlistId != null && activeSectionIndex >= 0
+
+    fun setlistSlots(setlist: Setlist): List<SetlistSlot> {
+        val songById = songs.associateBy { it.id }
+        val sectionById = sections.associateBy { it.id }
+        return setlist.songIds.flatMap { songId ->
+            val song = songById[songId] ?: return@flatMap emptyList()
+            song.sectionRefs.mapNotNull { ref ->
+                val section = sectionById[ref.sectionId] ?: return@mapNotNull null
+                SetlistSlot(songId = songId, section = section, autoAdvance = ref.autoAdvance)
+            }
+        }
+    }
+
+    fun activeSetlist(): Setlist? = setlists.firstOrNull { it.id == activeSetlistId }
+
+    fun activeSlots(): List<SetlistSlot> = activeSetlist()?.let { setlistSlots(it) }.orEmpty()
 }
 
 /**
@@ -487,129 +506,95 @@ class MetronomeController(
         prefs.putBoolean("trainerAutoStop", enabled)
     }
 
-    // Public names stay "song" until 2b-ii; these persist as library Section rows.
-    fun saveCurrentSong(name: String? = null) {
+    fun saveCurrentSection(name: String? = null) {
         val s = _state.value
-        val existing = s.songs.firstOrNull {
+        val existing = s.savedSections.firstOrNull {
             it.sameSetupAs(
-                s.bpm, s.timeSignature, s.subdivision, s.tone, s.accentNote, s.restNote,
+                s.bpm, s.timeSignature, s.subdivision, s.tone.id, s.accentNote, s.restNote,
                 s.beatAccents, s.swing, s.groupTempo, s.countInBars, s.mutePattern,
             )
         }
         if (existing != null) {
-            _state.update { it.copy(activeSongId = existing.id, tapHint = "ALREADY SAVED") }
+            _state.update { it.copy(activeSavedSectionId = existing.id, tapHint = "ALREADY SAVED") }
             return
         }
-        val song = SongPreset(
-            name = name?.trim().orEmpty().ifEmpty {
-                SongPreset.autoName(s.bpm, s.timeSignature, s.subdivision)
-            },
-            bpm = s.bpm,
-            timeSignature = s.timeSignature,
-            subdivision = s.subdivision,
-            tone = s.tone,
-            accentNote = s.accentNote,
-            restNote = s.restNote,
-            beatAccents = s.beatAccents,
-            swing = s.swing,
-            groupTempo = s.groupTempo,
-            countInBars = s.countInBars,
-            mutePattern = s.mutePattern,
-        )
-        library.upsertSongPreset(song)
-        reloadLibrary { it.copy(activeSongId = song.id, tapHint = "SAVED · ${song.name}") }
+        val resolvedName = name?.trim().orEmpty().ifEmpty {
+            Section.autoName(s.bpm, s.timeSignature, s.subdivision)
+        }
+        val section = snapshotSection(s, id = randomUuid(), name = resolvedName)
+        library.upsertSection(section)
+        reloadLibrary { it.copy(activeSavedSectionId = section.id, tapHint = "SAVED · ${section.displayName()}") }
     }
 
-    fun loadSong(song: SongPreset) {
-        applySongSetup(song)
-        _state.update { it.copy(activeSongId = song.id, tapHint = song.name.uppercase()) }
+    fun loadSection(section: Section) {
+        applySectionSetup(section)
+        _state.update { it.copy(activeSavedSectionId = section.id, tapHint = section.displayName().uppercase()) }
     }
 
-    fun deleteSong(song: SongPreset) {
-        library.deleteSongPreset(song.id)
+    fun deleteSection(section: Section) {
+        library.deleteSection(section.id)
         reloadLibrary {
-            it.copy(activeSongId = if (it.activeSongId == song.id) null else it.activeSongId)
+            it.copy(activeSavedSectionId = if (it.activeSavedSectionId == section.id) null else it.activeSavedSectionId)
         }
     }
 
-    fun renameSong(song: SongPreset, name: String) {
+    fun renameSection(section: Section, name: String) {
         val trimmed = name.trim().ifEmpty { return }
-        library.upsertSongPreset(song.copy(name = trimmed))
+        library.upsertSection(section.copy(name = trimmed))
         reloadLibrary { it.copy(tapHint = "RENAMED") }
     }
 
-    fun updateActiveSong() {
+    fun updateActiveSection() {
         val s = _state.value
-        val id = s.activeSongId ?: return
-        val current = s.songs.firstOrNull { it.id == id } ?: return
-        val updated = current.copy(
-            bpm = s.bpm,
-            timeSignature = s.timeSignature,
-            subdivision = s.subdivision,
-            tone = s.tone,
-            accentNote = s.accentNote,
-            restNote = s.restNote,
-            beatAccents = s.beatAccents,
-            swing = s.swing,
-            groupTempo = s.groupTempo,
-            countInBars = s.countInBars,
-            mutePattern = s.mutePattern,
-            name = if (current.name.contains("·")) {
-                SongPreset.autoName(s.bpm, s.timeSignature, s.subdivision)
-            } else current.name,
-        )
-        library.upsertSongPreset(updated)
+        val id = s.activeSavedSectionId ?: return
+        val current = s.savedSections.firstOrNull { it.id == id } ?: return
+        val name = if (current.name?.contains("·") == true) {
+            Section.autoName(s.bpm, s.timeSignature, s.subdivision)
+        } else current.name
+        library.upsertSection(snapshotSection(s, id = id, name = name))
         reloadLibrary { it.copy(tapHint = "UPDATED") }
     }
 
     fun createSetlist(name: String) {
         val trimmed = name.trim().ifEmpty { return }
-        val setlist = Setlist(name = trimmed, sections = emptyList())
-        persistSetlists(_state.value.setlists + setlist)
-        _state.update { it.copy(tapHint = "SET · ${setlist.name}") }
+        val setlist = library.createSetlist(trimmed)
+        reloadLibrary { it.copy(tapHint = "SET · ${setlist.name}") }
     }
 
     fun renameSetlist(id: String, name: String) {
         val trimmed = name.trim().ifEmpty { return }
-        persistSetlists(_state.value.setlists.map { if (it.id == id) it.copy(name = trimmed) else it })
-        _state.update { it.copy(tapHint = "RENAMED") }
+        library.renameSetlist(id, trimmed)
+        reloadLibrary { it.copy(tapHint = "RENAMED") }
     }
 
     fun deleteSetlist(id: String) {
-        persistSetlists(_state.value.setlists.filterNot { it.id == id })
+        library.deleteSetlist(id)
+        reloadLibrary()
         if (_state.value.activeSetlistId == id) exitSetlist()
     }
 
     fun addSectionFromCurrent(setlistId: String) {
         val s = _state.value
         if (s.setlists.none { it.id == setlistId }) return
-        val section = SetSection(
-            config = snapshotPreset(s),
-            bars = 0,
-            autoAdvance = false,
-        )
-        persistSetlists(
-            s.setlists.map { setlist ->
-                if (setlist.id == setlistId) setlist.copy(sections = setlist.sections + section) else setlist
-            },
-        )
-        _state.update { it.copy(tapHint = "SECTION ADDED") }
+        library.addSlot(setlistId, snapshotSection(s, id = randomUuid(), name = null), autoAdvance = false)
+        reloadLibrary { it.copy(tapHint = "SECTION ADDED") }
     }
 
     fun removeSection(setlistId: String, sectionId: String) {
         val s = _state.value
         val setlist = s.setlists.firstOrNull { it.id == setlistId } ?: return
-        val removedIndex = setlist.sections.indexOfFirst { it.id == sectionId }
+        val slots = s.setlistSlots(setlist)
+        val removedIndex = slots.indexOfFirst { it.section.id == sectionId }
         if (removedIndex < 0) return
-        val remaining = setlist.sections.filterNot { it.id == sectionId }
-        persistSetlists(
-            s.setlists.map { if (it.id == setlistId) it.copy(sections = remaining) else it },
-        )
+        library.removeSlot(setlistId, sectionId)
+        reloadLibrary()
         if (s.activeSetlistId != setlistId || s.activeSectionIndex < 0) return
+        val remainingLast = (_state.value.setlists.firstOrNull { it.id == setlistId }
+            ?.let { _state.value.setlistSlots(it) }?.lastIndex ?: -1)
         val nextIndex = when {
-            remaining.isEmpty() -> -1
+            remainingLast < 0 -> -1
             s.activeSectionIndex > removedIndex -> s.activeSectionIndex - 1
-            s.activeSectionIndex == removedIndex -> s.activeSectionIndex.coerceAtMost(remaining.lastIndex)
+            s.activeSectionIndex == removedIndex -> s.activeSectionIndex.coerceAtMost(remainingLast)
             else -> s.activeSectionIndex
         }
         _state.update { it.copy(activeSectionIndex = nextIndex) }
@@ -617,14 +602,8 @@ class MetronomeController(
 
     fun moveSection(setlistId: String, from: Int, to: Int) {
         val s = _state.value
-        val setlist = s.setlists.firstOrNull { it.id == setlistId } ?: return
-        if (from !in setlist.sections.indices || to !in setlist.sections.indices) return
-        val sections = setlist.sections.toMutableList()
-        val item = sections.removeAt(from)
-        sections.add(to, item)
-        persistSetlists(
-            s.setlists.map { if (it.id == setlistId) it.copy(sections = sections) else it },
-        )
+        library.moveSlot(setlistId, from, to)
+        reloadLibrary()
         if (s.activeSetlistId != setlistId) return
         val newIndex = when (s.activeSectionIndex) {
             from -> to
@@ -638,129 +617,132 @@ class MetronomeController(
         _state.update { it.copy(activeSectionIndex = newIndex) }
     }
 
-    fun updateSection(setlistId: String, section: SetSection) {
-        persistSetlists(
-            _state.value.setlists.map { setlist ->
-                if (setlist.id != setlistId) setlist
-                else setlist.copy(sections = setlist.sections.map { if (it.id == section.id) section else it })
-            },
-        )
+    fun updateSection(setlistId: String, section: Section) {
+        library.upsertSection(section)
+        reloadLibrary()
     }
 
     fun setSectionBpm(setlistId: String, sectionId: String, bpm: Int) {
-        mutateSectionConfig(setlistId, sectionId) {
+        mutateSection(setlistId, sectionId) {
             it.copy(bpm = bpm.coerceIn(MetronomeLimits.MIN_BPM, MetronomeLimits.MAX_BPM))
         }
     }
 
     fun setSectionTimeSignature(setlistId: String, sectionId: String, signature: TimeSignature) {
         val normalized = TimeSignature.normalize(signature.beats, signature.noteValue) ?: return
-        mutateSectionConfig(setlistId, sectionId) { config ->
-            config.copy(
-                timeSignature = normalized,
+        mutateSection(setlistId, sectionId) { section ->
+            section.copy(
+                beats = normalized.beats,
+                noteValue = normalized.noteValue,
                 beatAccents = BeatAccent.defaultPattern(normalized.beats, normalized.noteValue),
-                groupTempo = config.groupTempo && normalized.isCompound,
+                groupTempo = section.groupTempo && normalized.isCompound,
             )
         }
     }
 
     fun setSectionSubdivision(setlistId: String, sectionId: String, subdivision: Subdivision) {
-        mutateSectionConfig(setlistId, sectionId) { it.copy(subdivision = subdivision) }
+        mutateSection(setlistId, sectionId) { it.copy(subdivision = subdivision) }
     }
 
     fun setSectionSwing(setlistId: String, sectionId: String, swing: SwingFeel) {
-        mutateSectionConfig(setlistId, sectionId) { it.copy(swing = swing) }
+        mutateSection(setlistId, sectionId) { it.copy(swing = swing) }
     }
 
     fun setSectionTone(setlistId: String, sectionId: String, tone: MetronomeTone) {
         val applied = availableTones().find { it.id == tone.id } ?: MetronomeTone.DEFAULT
-        mutateSectionConfig(setlistId, sectionId) { it.copy(tone = applied) }
+        mutateSection(setlistId, sectionId) { it.copy(toneId = applied.id) }
     }
 
     fun setSectionAccentNote(setlistId: String, sectionId: String, note: AccentNote) {
-        mutateSectionConfig(setlistId, sectionId) { it.copy(accentNote = note) }
+        mutateSection(setlistId, sectionId) { it.copy(accentNote = note) }
     }
 
     fun setSectionRestNote(setlistId: String, sectionId: String, note: AccentNote) {
-        mutateSectionConfig(setlistId, sectionId) { it.copy(restNote = note) }
+        mutateSection(setlistId, sectionId) { it.copy(restNote = note) }
     }
 
     fun setSectionBeatAccents(setlistId: String, sectionId: String, levels: List<BeatAccent>) {
-        mutateSectionConfig(setlistId, sectionId) { config ->
-            config.copy(
+        mutateSection(setlistId, sectionId) { section ->
+            section.copy(
                 beatAccents = BeatAccent.decode(
                     BeatAccent.encode(levels),
-                    config.timeSignature.beats,
-                    config.timeSignature.noteValue,
+                    section.beats,
+                    section.noteValue,
                 ),
             )
         }
     }
 
     fun setSectionGroupTempo(setlistId: String, sectionId: String, enabled: Boolean) {
-        mutateSectionConfig(setlistId, sectionId) { config ->
-            config.copy(groupTempo = enabled && config.timeSignature.isCompound)
+        mutateSection(setlistId, sectionId) { section ->
+            section.copy(groupTempo = enabled && section.timeSignature.isCompound)
         }
     }
 
     fun setSectionCountInBars(setlistId: String, sectionId: String, bars: Int) {
-        mutateSectionConfig(setlistId, sectionId) { it.copy(countInBars = bars.coerceIn(0, 4)) }
+        mutateSection(setlistId, sectionId) { it.copy(countInBars = bars.coerceIn(0, 4)) }
     }
 
     fun setSectionLabel(setlistId: String, sectionId: String, label: String?) {
         mutateSection(setlistId, sectionId) {
-            it.copy(label = label?.trim()?.takeIf { trimmed -> trimmed.isNotEmpty() })
+            it.copy(name = label?.trim()?.takeIf { trimmed -> trimmed.isNotEmpty() })
         }
     }
 
     fun setSectionBars(setlistId: String, sectionId: String, bars: Int) {
-        mutateSection(setlistId, sectionId) { it.copy(bars = bars.coerceIn(0, SECTION_BARS_MAX)) }
+        val clamped = bars.coerceIn(0, SECTION_BARS_MAX)
+        mutateSection(setlistId, sectionId) { it.copy(bars = clamped) }
+        if (clamped == 0) {
+            library.setAutoAdvance(setlistId, sectionId, false)
+            reloadLibrary()
+        }
+    }
+
+    fun setSectionAutoAdvance(setlistId: String, sectionId: String, autoAdvance: Boolean) {
+        library.setAutoAdvance(setlistId, sectionId, autoAdvance)
+        reloadLibrary()
     }
 
     fun captureCurrentIntoSection(setlistId: String, sectionId: String) {
-        val snapshot = snapshotPreset(_state.value)
-        mutateSection(setlistId, sectionId) { it.copy(config = snapshot) }
-    }
-
-    private fun mutateSectionConfig(
-        setlistId: String,
-        sectionId: String,
-        transform: (SongPreset) -> SongPreset,
-    ) {
-        mutateSection(setlistId, sectionId) { it.copy(config = transform(it.config)) }
+        val s = _state.value
+        mutateSection(setlistId, sectionId) { current ->
+            snapshotSection(s, id = current.id, name = current.name).copy(bars = current.bars)
+        }
     }
 
     private fun mutateSection(
         setlistId: String,
         sectionId: String,
-        transform: (SetSection) -> SetSection,
+        transform: (Section) -> Section,
     ) {
-        val section = _state.value.setlists
-            .firstOrNull { it.id == setlistId }
-            ?.sections
-            ?.firstOrNull { it.id == sectionId }
-            ?: return
-        updateSection(setlistId, transform(section))
+        val section = slot(setlistId, sectionId)?.section ?: return
+        library.upsertSection(transform(section))
+        reloadLibrary()
         maybeReapplyActiveSection(setlistId, sectionId)
     }
 
-    /** Stopped + this section is active → applySongSetup. Playing → persist only. */
+    private fun slot(setlistId: String, sectionId: String): SetlistSlot? {
+        val setlist = _state.value.setlists.firstOrNull { it.id == setlistId } ?: return null
+        return _state.value.setlistSlots(setlist).firstOrNull { it.section.id == sectionId }
+    }
+
+    /** Stopped + this section is active → applySectionSetup. Playing → persist only. */
     private fun maybeReapplyActiveSection(setlistId: String, sectionId: String) {
         val s = _state.value
         if (s.isPlaying) return
         if (!s.inSetMode || s.activeSetlistId != setlistId) return
-        val setlist = s.setlists.firstOrNull { it.id == setlistId } ?: return
-        val index = setlist.sections.indexOfFirst { it.id == sectionId }
+        val slots = s.activeSlots()
+        val index = slots.indexOfFirst { it.section.id == sectionId }
         if (index != s.activeSectionIndex) return
-        val section = setlist.sections.getOrNull(index) ?: return
-        applySongSetup(section.config)
+        val section = slots.getOrNull(index)?.section ?: return
+        applySectionSetup(section)
     }
 
     fun loadSetlist(setlist: Setlist) {
         val resolved = _state.value.setlists.firstOrNull { it.id == setlist.id } ?: setlist
         pendingSetNav = PendingSetNav.NONE
         sectionStartBar = barIndex
-        val first = resolved.sections.firstOrNull()
+        val first = _state.value.setlistSlots(resolved).firstOrNull()
         if (first == null) {
             _state.update {
                 it.copy(
@@ -772,13 +754,13 @@ class MetronomeController(
             }
             return
         }
-        applySongSetup(first.config)
+        applySectionSetup(first.section)
         _state.update {
             it.copy(
                 activeSetlistId = resolved.id,
                 activeSectionIndex = 0,
                 sectionBar = 0,
-                tapHint = (first.label ?: resolved.name).uppercase(),
+                tapHint = first.section.displayName().uppercase(),
             )
         }
     }
@@ -1051,8 +1033,8 @@ class MetronomeController(
         val storedTone = MetronomeTone.fromId(prefs.getString(PREF_TONE_ID).orEmpty())
             ?.takeIf { it in toneOptions }
             ?: MetronomeTone.DEFAULT
-        val songs = library.loadSongPresets().dedupeSongs()
-        val setlists = library.loadUiSetlists()
+        val songs = library.loadSongs()
+        val sections = library.loadSections()
         return MetronomeUiState(
             bpm = prefs.getInt("bpm", 120),
             volume = prefs.getFloat("volume", 0.9f).coerceIn(0f, 1f),
@@ -1083,17 +1065,20 @@ class MetronomeController(
             trainerEveryBars = prefs.getInt("trainerEveryBars", 4),
             trainerAutoStop = prefs.getBoolean("trainerAutoStop", true),
             songs = songs,
-            setlists = setlists,
+            sections = sections,
+            savedSections = sections.savedOnly(songs).dedupeSections(),
+            setlists = library.loadSetlists(),
         )
     }
 
     private fun maybeAdvanceSection(bar: Int) {
         val s = _state.value
         if (!s.inSetMode) return
-        val setlist = s.setlists.firstOrNull { it.id == s.activeSetlistId } ?: return
-        val section = setlist.sections.getOrNull(s.activeSectionIndex) ?: return
+        val setlist = s.activeSetlist() ?: return
+        val slots = s.setlistSlots(setlist)
+        val slot = slots.getOrNull(s.activeSectionIndex) ?: return
         val elapsed = bar - sectionStartBar
-        val reachedEnd = section.autoAdvance && section.bars > 0 && elapsed >= section.bars
+        val reachedEnd = slot.autoAdvance && slot.section.bars > 0 && elapsed >= slot.section.bars
         val nav = pendingSetNav
         if (nav == PendingSetNav.NONE && !reachedEnd) {
             _state.update { it.copy(sectionBar = elapsed.coerceAtLeast(0)) }
@@ -1104,14 +1089,14 @@ class MetronomeController(
             PendingSetNav.RESTART -> 0
             PendingSetNav.PREVIOUS -> when {
                 s.activeSectionIndex > 0 -> s.activeSectionIndex - 1
-                setlist.loop && setlist.sections.isNotEmpty() -> setlist.sections.lastIndex
+                setlist.loop && slots.isNotEmpty() -> slots.lastIndex
                 else -> 0
             }
             PendingSetNav.NEXT, PendingSetNav.NONE -> {
                 val nextIndex = s.activeSectionIndex + 1
-                if (nextIndex <= setlist.sections.lastIndex) {
+                if (nextIndex <= slots.lastIndex) {
                     nextIndex
-                } else if (setlist.loop && setlist.sections.isNotEmpty()) {
+                } else if (setlist.loop && slots.isNotEmpty()) {
                     0
                 } else {
                     finishNonLoopingSet(setlist)
@@ -1129,76 +1114,85 @@ class MetronomeController(
 
     private fun armLoadedSetFromTop() {
         val s = _state.value
-        val setlist = s.setlists.firstOrNull { it.id == s.activeSetlistId } ?: return
-        if (setlist.sections.isEmpty()) return
+        val setlist = s.activeSetlist() ?: return
+        if (s.setlistSlots(setlist).isEmpty()) return
         applySectionAt(setlist, 0, barIndex)
     }
 
     private fun applySectionAt(setlist: Setlist, index: Int, bar: Int) {
-        val section = setlist.sections.getOrNull(index) ?: return
-        applySongSetup(section.config)
+        val slot = _state.value.setlistSlots(setlist).getOrNull(index) ?: return
+        applySectionSetup(slot.section)
         sectionStartBar = bar
         _state.update {
             it.copy(
                 activeSetlistId = setlist.id,
                 activeSectionIndex = index,
                 sectionBar = 0,
-                tapHint = (section.label ?: setlist.name).uppercase(),
+                tapHint = slot.section.displayName().uppercase(),
             )
         }
     }
 
-    private fun applySongSetup(song: SongPreset) {
-        setBpm(song.bpm)
-        engine.setTimeSignature(song.timeSignature)
-        engine.setBeatAccents(song.beatAccents)
-        setSubdivision(song.subdivision)
-        setSwing(song.swing)
-        setTone(song.tone, preview = false)
-        setAccentNote(song.accentNote, preview = false)
-        setRestNote(song.restNote, preview = false)
-        setCountInBars(song.countInBars)
-        setMutePattern(song.mutePattern)
-        val group = song.groupTempo && song.timeSignature.isCompound
+    private fun applySectionSetup(section: Section) {
+        val tone = availableTones().find { it.id == section.toneId } ?: MetronomeTone.DEFAULT
+        setBpm(section.bpm)
+        engine.setTimeSignature(section.timeSignature)
+        engine.setBeatAccents(section.beatAccents)
+        setSubdivision(section.subdivision)
+        setSwing(section.swing)
+        setTone(tone, preview = false)
+        setAccentNote(section.accentNote, preview = false)
+        setRestNote(section.restNote, preview = false)
+        setCountInBars(section.countInBars)
+        setMutePattern(section.mutePattern)
+        val group = section.groupTempo && section.timeSignature.isCompound
         engine.setGroupTempo(group)
         _state.update {
             it.copy(
-                timeSignature = song.timeSignature,
-                beatAccents = song.beatAccents,
+                timeSignature = section.timeSignature,
+                beatAccents = section.beatAccents,
                 groupTempo = group,
                 activeBeat = -1,
             )
         }
-        prefs.putInt("beats", song.timeSignature.beats)
-        prefs.putInt("noteValue", song.timeSignature.noteValue)
+        prefs.putInt("beats", section.timeSignature.beats)
+        prefs.putInt("noteValue", section.timeSignature.noteValue)
         prefs.putBoolean("groupTempo", group)
-        prefs.putString("beatAccents", BeatAccent.encode(song.beatAccents))
-    }
-
-    private fun persistSetlists(next: List<Setlist>) {
-        library.replaceSetlists(next)
-        reloadLibrary()
+        prefs.putString("beatAccents", BeatAccent.encode(section.beatAccents))
     }
 
     private fun reloadLibrary(transform: (MetronomeUiState) -> MetronomeUiState = { it }) {
-        val songs = library.loadSongPresets().dedupeSongs()
-        val setlists = library.loadUiSetlists()
-        _state.update { transform(it.copy(songs = songs, setlists = setlists)) }
+        val songs = library.loadSongs()
+        val sections = library.loadSections()
+        _state.update {
+            transform(
+                it.copy(
+                    songs = songs,
+                    sections = sections,
+                    savedSections = sections.savedOnly(songs).dedupeSections(),
+                    setlists = library.loadSetlists(),
+                ),
+            )
+        }
     }
 
-    private fun snapshotPreset(s: MetronomeUiState): SongPreset = SongPreset(
-        name = SongPreset.autoName(s.bpm, s.timeSignature, s.subdivision),
+    private fun snapshotSection(s: MetronomeUiState, id: String, name: String?): Section = Section(
+        id = id,
+        name = name?.trim()?.takeIf { it.isNotEmpty() },
+        bars = 0,
         bpm = s.bpm,
-        timeSignature = s.timeSignature,
+        beats = s.timeSignature.beats,
+        noteValue = s.timeSignature.noteValue,
         subdivision = s.subdivision,
-        tone = s.tone,
+        toneId = s.tone.id,
         accentNote = s.accentNote,
         restNote = s.restNote,
         beatAccents = s.beatAccents,
         swing = s.swing,
         groupTempo = s.groupTempo,
         countInBars = s.countInBars,
-        mutePattern = s.mutePattern,
+        mutePlayBars = s.mutePattern.playBars,
+        muteSilentBars = s.mutePattern.silentBars,
     )
 
     private fun availableTones(): List<MetronomeTone> =
@@ -1215,14 +1209,19 @@ class MetronomeController(
     }
 }
 
-private fun List<SongPreset>.dedupeSongs(): List<SongPreset> {
+private fun List<Section>.savedOnly(songs: List<Song>): List<Section> {
+    val used = songs.flatMap { it.sectionIds }.toSet()
+    return filter { it.id !in used }
+}
+
+private fun List<Section>.dedupeSections(): List<Section> {
     val seen = LinkedHashSet<String>()
-    return filter { song ->
+    return filter { section ->
         val key = listOf(
-            song.bpm, song.timeSignature.beats, song.timeSignature.noteValue,
-            song.subdivision.ordinal, song.tone.id, song.accentNote.ordinal, song.restNote.ordinal,
-            BeatAccent.encode(song.beatAccents), song.swing.ordinal, song.groupTempo,
-            song.countInBars, song.mutePattern.playBars, song.mutePattern.silentBars,
+            section.bpm, section.beats, section.noteValue,
+            section.subdivision.ordinal, section.toneId, section.accentNote.ordinal, section.restNote.ordinal,
+            BeatAccent.encode(section.beatAccents), section.swing.ordinal, section.groupTempo,
+            section.countInBars, section.mutePlayBars, section.muteSilentBars,
         ).joinToString("|")
         seen.add(key)
     }

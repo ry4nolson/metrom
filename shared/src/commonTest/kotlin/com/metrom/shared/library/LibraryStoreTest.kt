@@ -36,7 +36,14 @@ class LibraryStoreTest {
         sections.upsert(a)
         sections.upsert(b)
         sections.upsert(c)
-        songs.upsert(Song(id = "song-1", name = "Tune", loop = true, sectionIds = listOf("a", "b", "c")))
+        songs.upsert(
+            Song(
+                id = "song-1",
+                name = "Tune",
+                loop = true,
+                sectionRefs = listOf(SongSectionRef("a"), SongSectionRef("b"), SongSectionRef("c")),
+            ),
+        )
         assertEquals(listOf("a", "b", "c"), songs.get("song-1")?.sectionIds)
         songs.setSections("song-1", listOf("c", "a", "b"))
         assertEquals(listOf("c", "a", "b"), songs.get("song-1")?.sectionIds)
@@ -47,8 +54,8 @@ class LibraryStoreTest {
     fun setlistKeepsOrderedSongIdsAndReorder() {
         val (sections, songs, setlists) = stores()
         sections.upsert(sampleSection("s1", "One", 4, 90))
-        songs.upsert(Song("song-a", "A", sectionIds = listOf("s1")))
-        songs.upsert(Song("song-b", "B", sectionIds = listOf("s1")))
+        songs.upsert(Song("song-a", "A", sectionRefs = listOf(SongSectionRef("s1"))))
+        songs.upsert(Song("song-b", "B", sectionRefs = listOf(SongSectionRef("s1"))))
         setlists.upsert(
             Setlist(id = "set-1", name = "Gig", loop = false, pauseBetweenMs = 1500, songIds = listOf("song-a", "song-b")),
         )
@@ -59,10 +66,42 @@ class LibraryStoreTest {
     }
 
     @Test
+    fun songRoundTripsOrderedSectionsAndPerSectionAutoAdvance() {
+        val (sections, songs, setlists) = stores()
+        sections.upsert(sampleSection("intro", "Intro", 8, 90))
+        sections.upsert(sampleSection("verse", "Verse", 16, 100))
+        songs.upsert(
+            Song(
+                id = "multi",
+                name = "Tune",
+                sectionRefs = listOf(
+                    SongSectionRef("intro", autoAdvance = true),
+                    SongSectionRef("verse", autoAdvance = false),
+                ),
+            ),
+        )
+        setlists.upsert(Setlist(id = "gig", name = "Gig", songIds = listOf("multi")))
+        val loaded = songs.get("multi")!!
+        assertEquals(listOf("intro", "verse"), loaded.sectionIds)
+        assertEquals(listOf(true, false), loaded.sectionRefs.map { it.autoAdvance })
+        songs.setSectionRefs(
+            "multi",
+            listOf(
+                SongSectionRef("verse", autoAdvance = true),
+                SongSectionRef("intro", autoAdvance = true),
+            ),
+        )
+        val reordered = songs.get("multi")!!
+        assertEquals(listOf("verse", "intro"), reordered.sectionIds)
+        assertEquals(listOf(true, true), reordered.sectionRefs.map { it.autoAdvance })
+        assertEquals(listOf("multi"), setlists.get("gig")?.songIds)
+    }
+
+    @Test
     fun deletingReferencedSectionIsRestrictedUntilUnlinked() {
         val (sections, songs, _) = stores()
         sections.upsert(sampleSection("sec-r", "R", 4, 100))
-        songs.upsert(Song("song-r", "Uses", sectionIds = listOf("sec-r")))
+        songs.upsert(Song("song-r", "Uses", sectionRefs = listOf(SongSectionRef("sec-r"))))
         assertEquals(1, sections.referenceCount("sec-r"))
         val blocked = assertFails { sections.delete("sec-r") }
         assertTrue(blocked.message?.contains("FOREIGN KEY", ignoreCase = true) == true || blocked is Exception)
@@ -77,7 +116,7 @@ class LibraryStoreTest {
     fun deletingReferencedSongIsRestrictedUntilUnlinked() {
         val (sections, songs, setlists) = stores()
         sections.upsert(sampleSection("sec-q", "Q", 2, 80))
-        songs.upsert(Song("song-q", "Q", sectionIds = listOf("sec-q")))
+        songs.upsert(Song("song-q", "Q", sectionRefs = listOf(SongSectionRef("sec-q"))))
         setlists.upsert(Setlist("set-q", "Q set", songIds = listOf("song-q")))
         assertEquals(1, songs.referenceCount("song-q"))
         assertFails { songs.delete("song-q") }
@@ -94,7 +133,7 @@ class LibraryStoreTest {
         val (sections, songs, _) = stores()
         sections.upsert(sampleSection("keep-a", "Keep A", 4, 90))
         sections.upsert(sampleSection("keep-b", "Keep B", 4, 95))
-        songs.upsert(Song("gone", "Gone", sectionIds = listOf("keep-a", "keep-b")))
+        songs.upsert(Song("gone", "Gone", sectionRefs = listOf(SongSectionRef("keep-a"), SongSectionRef("keep-b"))))
         songs.delete("gone")
         assertNull(songs.get("gone"))
         assertNotNull(sections.get("keep-a"))
@@ -106,7 +145,7 @@ class LibraryStoreTest {
     fun deletingSetlistCascadesJunctionRowsButKeepsSongs() {
         val (sections, songs, setlists) = stores()
         sections.upsert(sampleSection("s", "S", 4, 90))
-        songs.upsert(Song("stay", "Stay", sectionIds = listOf("s")))
+        songs.upsert(Song("stay", "Stay", sectionRefs = listOf(SongSectionRef("s"))))
         setlists.upsert(Setlist("gone-set", "Gone", songIds = listOf("stay")))
         setlists.delete("gone-set")
         assertNull(setlists.get("gone-set"))

@@ -7,7 +7,7 @@ import co.touchlab.sqliter.DatabaseConfiguration
 
 actual fun createMetromSqlDriver(): SqlDriver = NativeSqliteDriver(
     schema = MetromDatabase.Schema,
-    name = "metrom.db",
+    name = "metrom-v2.db",
     onConfiguration = { config ->
         config.copy(
             extendedConfig = DatabaseConfiguration.Extended(foreignKeyConstraints = true),

@@ -110,9 +110,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.metrom.app.MetronomeViewModel
-import com.metrom.shared.data.SetSection
-import com.metrom.shared.data.Setlist
-import com.metrom.shared.data.SongPreset
+import com.metrom.shared.library.Section
+import com.metrom.shared.library.Setlist
+import com.metrom.shared.practice.SetlistSlot
 import com.metrom.shared.detect.DetectDebug
 import com.metrom.shared.detect.DetectState
 import com.metrom.shared.detect.FailReason
@@ -414,8 +414,8 @@ private fun SettingsColumn(
     }
     Spacer(modifier = Modifier.height(12.dp))
     ExpandablePanel(
-        title = "SONGS",
-        summary = if (state.songs.isEmpty()) "bookmark to save" else "${state.songs.size} saved",
+        title = "SECTIONS",
+        summary = if (state.savedSections.isEmpty()) "bookmark to save" else "${state.savedSections.size} saved",
         initiallyExpanded = false
     ) {
         SongsPanelBody(state, viewModel)
@@ -743,11 +743,11 @@ private fun TopBar(
         }
         IconButton(
             onClick = {
-                saveName = SongPreset.autoName(state.bpm, state.timeSignature, state.subdivision)
+                saveName = Section.autoName(state.bpm, state.timeSignature, state.subdivision)
                 saving = true
             }
         ) {
-            Icon(Icons.Rounded.BookmarkAdd, contentDescription = "Save song", tint = Copper)
+            Icon(Icons.Rounded.BookmarkAdd, contentDescription = "Save section", tint = Copper)
         }
         IconButton(onClick = viewModel::toggleMute) {
             Icon(
@@ -768,7 +768,7 @@ private fun TopBar(
     if (saving) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { saving = false },
-            title = { Text("Save song", color = Bone) },
+            title = { Text("Save section", color = Bone) },
             text = {
                 androidx.compose.material3.OutlinedTextField(
                     value = saveName,
@@ -783,7 +783,7 @@ private fun TopBar(
                     color = EmberSoft,
                     modifier = Modifier
                         .clickable {
-                            viewModel.saveCurrentSong(saveName)
+                            viewModel.saveCurrentSection(saveName)
                             saving = false
                         }
                         .padding(8.dp)
@@ -913,7 +913,7 @@ private fun practiceSummary(state: MetronomeUiState): String {
 private fun setlistSummary(state: MetronomeUiState): String {
     if (state.inSetMode) {
         val set = state.setlists.firstOrNull { it.id == state.activeSetlistId }
-        val count = set?.sections?.size ?: 0
+        val count = set?.let { state.setlistSlots(it).size } ?: 0
         val index = state.activeSectionIndex + 1
         return set?.name?.let { "$it · $index/$count" } ?: "set mode"
     }
@@ -1933,47 +1933,47 @@ private fun PracticePanelBody(state: MetronomeUiState, viewModel: MetronomeViewM
 
 @Composable
 private fun SongsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewModel) {
-    var renaming by remember { mutableStateOf<SongPreset?>(null) }
+    var renaming by remember { mutableStateOf<Section?>(null) }
     var renameText by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        if (state.activeSongId != null) {
+        if (state.activeSavedSectionId != null) {
             ChoiceChip(
                 label = "Update active",
                 selected = false,
-                onClick = viewModel::updateActiveSong
+                onClick = viewModel::updateActiveSection
             )
         }
-        if (state.songs.isEmpty()) {
+        if (state.savedSections.isEmpty()) {
             Text(
                 "Bookmark tempo, meter, swing, and practice settings. Long-press to rename.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Ash
             )
         } else {
-            state.songs.forEach { song ->
+            state.savedSections.forEach { section ->
                 SongRow(
-                    song = song,
-                    selected = state.activeSongId == song.id,
-                    onLoad = { viewModel.loadSong(song) },
-                    onDelete = { viewModel.deleteSong(song) },
+                    song = section,
+                    selected = state.activeSavedSectionId == section.id,
+                    onLoad = { viewModel.loadSection(section) },
+                    onDelete = { viewModel.deleteSection(section) },
                     onRename = {
-                        renaming = song
-                        renameText = song.name
+                        renaming = section
+                        renameText = section.displayName()
                     }
                 )
             }
         }
     }
 
-    renaming?.let { song ->
+    renaming?.let { section ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { renaming = null },
             title = {
-                Text("Rename song", color = Bone)
+                Text("Rename section", color = Bone)
             },
             text = {
                 androidx.compose.material3.OutlinedTextField(
@@ -1989,7 +1989,7 @@ private fun SongsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewMode
                     color = EmberSoft,
                     modifier = Modifier
                         .clickable {
-                            viewModel.renameSong(song, renameText)
+                            viewModel.renameSection(section, renameText)
                             renaming = null
                         }
                         .padding(8.dp)
@@ -2011,7 +2011,7 @@ private fun SongsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewMode
 
 @Composable
 private fun SongRow(
-    song: SongPreset,
+    song: Section,
     selected: Boolean,
     onLoad: () -> Unit,
     onDelete: () -> Unit,
@@ -2034,7 +2034,7 @@ private fun SongRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                song.name,
+                song.displayName(),
                 style = MaterialTheme.typography.titleLarge,
                 color = Bone,
                 maxLines = 1,
@@ -2063,10 +2063,11 @@ private fun SongRow(
 @Composable
 private fun SetlistStrip(state: MetronomeUiState, viewModel: MetronomeViewModel) {
     val setlist = state.setlists.firstOrNull { it.id == state.activeSetlistId } ?: return
-    val section = setlist.sections.getOrNull(state.activeSectionIndex)
-    val count = setlist.sections.size
+    val slots = state.setlistSlots(setlist)
+    val section = slots.getOrNull(state.activeSectionIndex)?.section
+    val count = slots.size
     val indexLabel = "${state.activeSectionIndex + 1}/$count"
-    val sectionTitle = section?.let { sectionLabel(it) } ?: setlist.name
+    val sectionTitle = section?.displayName() ?: setlist.name
     val bars = section?.bars ?: 0
     val progress = if (bars > 0) {
         (state.sectionBar.toFloat() / bars.toFloat()).coerceIn(0f, 1f)
@@ -2167,36 +2168,31 @@ private fun SetlistsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewM
                 selected = false,
                 onClick = { viewModel.addSectionFromCurrent(editing.id) }
             )
-            if (editing.sections.isEmpty()) {
+            val slots = state.setlistSlots(editing)
+            if (slots.isEmpty()) {
                 Text(
                     "Add the current tempo, meter, and tone as a section. Open-ended until you set a bar count.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Ash
                 )
             } else {
-                editing.sections.forEachIndexed { index, section ->
+                slots.forEachIndexed { index, slot ->
                     SectionEditorRow(
-                        section = section,
+                        section = slot,
                         selected = state.inSetMode &&
                             state.activeSetlistId == editing.id &&
                             state.activeSectionIndex == index,
                         isFirst = index == 0,
-                        isLast = index == editing.sections.lastIndex,
+                        isLast = index == slots.lastIndex,
                         onBars = { bars ->
-                            viewModel.updateSection(
-                                editing.id,
-                                section.copy(bars = bars, autoAdvance = if (bars == 0) false else section.autoAdvance),
-                            )
+                            viewModel.setSectionBars(editing.id, slot.section.id, bars)
                         },
                         onToggleAuto = {
-                            viewModel.updateSection(
-                                editing.id,
-                                section.copy(autoAdvance = !section.autoAdvance),
-                            )
+                            viewModel.setSectionAutoAdvance(editing.id, slot.section.id, !slot.autoAdvance)
                         },
                         onMoveUp = { viewModel.moveSection(editing.id, index, index - 1) },
                         onMoveDown = { viewModel.moveSection(editing.id, index, index + 1) },
-                        onRemove = { viewModel.removeSection(editing.id, section.id) }
+                        onRemove = { viewModel.removeSection(editing.id, slot.section.id) }
                     )
                 }
             }
@@ -2219,6 +2215,7 @@ private fun SetlistsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewM
                 state.setlists.forEach { setlist ->
                     SetlistRow(
                         setlist = setlist,
+                        slotCount = state.setlistSlots(setlist).size,
                         selected = state.activeSetlistId == setlist.id,
                         onLoad = {
                             viewModel.loadSetlist(setlist)
@@ -2313,13 +2310,13 @@ private fun SetlistsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewM
 @Composable
 private fun SetlistRow(
     setlist: Setlist,
+    slotCount: Int,
     selected: Boolean,
     onLoad: () -> Unit,
     onDelete: () -> Unit,
     onRename: () -> Unit
 ) {
-    val count = setlist.sections.size
-    val countLabel = if (count == 1) "1 section" else "$count sections"
+    val countLabel = if (slotCount == 1) "1 section" else "$slotCount sections"
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2359,7 +2356,7 @@ private fun SetlistRow(
 
 @Composable
 private fun SectionEditorRow(
-    section: SetSection,
+    section: SetlistSlot,
     selected: Boolean,
     isFirst: Boolean,
     isLast: Boolean,
@@ -2418,12 +2415,12 @@ private fun SectionEditorRow(
             barOptions.forEach { bars ->
                 ChoiceChip(
                     label = if (bars == 0) "Open" else bars.toString(),
-                    selected = section.bars == bars,
+                    selected = section.section.bars == bars,
                     onClick = { onBars(bars) }
                 )
             }
         }
-        if (section.bars > 0) {
+        if (section.section.bars > 0) {
             ChoiceChip(
                 label = "Auto",
                 selected = section.autoAdvance,
@@ -2433,18 +2430,12 @@ private fun SectionEditorRow(
     }
 }
 
-private fun sectionLabel(section: SetSection): String =
-    section.label?.takeIf { it.isNotBlank() }
-        ?: SongPreset.autoName(
-            section.config.bpm,
-            section.config.timeSignature,
-            section.config.subdivision,
-        )
+private fun sectionLabel(slot: SetlistSlot): String = slot.section.displayName()
 
-private fun sectionLengthLabel(section: SetSection): String = when {
-    section.bars <= 0 -> "open-ended"
-    section.autoAdvance -> "${section.bars} bars · auto"
-    else -> "${section.bars} bars"
+private fun sectionLengthLabel(slot: SetlistSlot): String = when {
+    slot.section.bars <= 0 -> "open-ended"
+    slot.autoAdvance -> "${slot.section.bars} bars · auto"
+    else -> "${slot.section.bars} bars"
 }
 
 @Composable

@@ -76,7 +76,7 @@ class SongStore(private val db: MetromDatabase) {
             } else {
                 db.metromQueries.updateSong(song.name, song.loop.toLong(), song.id)
             }
-            setSections(song.id, song.sectionIds)
+            setSectionRefs(song.id, song.sectionRefs)
         }
     }
 
@@ -85,10 +85,19 @@ class SongStore(private val db: MetromDatabase) {
     }
 
     fun setSections(songId: String, sectionIds: List<String>) {
+        setSectionRefs(songId, sectionIds.map { SongSectionRef(it) })
+    }
+
+    fun setSectionRefs(songId: String, refs: List<SongSectionRef>) {
         db.transaction {
             db.metromQueries.clearSongSections(songId)
-            sectionIds.forEachIndexed { index, sectionId ->
-                db.metromQueries.insertSongSection(songId, sectionId, index.toLong())
+            refs.forEachIndexed { index, ref ->
+                db.metromQueries.insertSongSection(
+                    songId,
+                    ref.sectionId,
+                    index.toLong(),
+                    ref.autoAdvance.toLong(),
+                )
             }
         }
     }
@@ -100,7 +109,12 @@ class SongStore(private val db: MetromDatabase) {
         id = id,
         name = name,
         loop = loop.toBoolean(),
-        sectionIds = db.metromQueries.selectSectionIdsForSong(id).executeAsList(),
+        sectionRefs = db.metromQueries.selectSongSectionRefs(id).executeAsList().map { row ->
+            SongSectionRef(
+                sectionId = row.section_id,
+                autoAdvance = row.auto_advance.toBoolean(),
+            )
+        },
     )
 }
 

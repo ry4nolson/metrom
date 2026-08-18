@@ -7,7 +7,7 @@ struct MetronomeView: View {
     @Environment(\.metromPalette) private var palette
 
     @State private var practiceExpanded = false
-    @State private var songsExpanded = false
+    @State private var sectionsExpanded = false
     @State private var setlistsExpanded = false
     @State private var editingSetlistId: String?
     @State private var bpmScale: CGFloat = 1
@@ -19,7 +19,7 @@ struct MetronomeView: View {
     @State private var openMeters = false
     @State private var saveName = ""
     @State private var newSetlistName = ""
-    @State private var renamingSong: MetronomeBridge.SongRow?
+    @State private var renamingSection: MetronomeBridge.SavedSectionRow?
     @State private var renamingSetlist: MetronomeBridge.SetlistRow?
     @State private var renameText = ""
 
@@ -74,29 +74,29 @@ struct MetronomeView: View {
         .onChange(of: bridge.inSetMode) { active in
             if active { setlistsExpanded = true }
         }
-        .alert("Save song", isPresented: $showSaveDialog) {
+        .alert("Save section", isPresented: $showSaveDialog) {
             TextField("Name", text: $saveName)
             Button("Cancel", role: .cancel) {}
             Button("Save") {
-                bridge.saveSong(name: saveName)
+                bridge.saveSection(name: saveName)
             }
         } message: {
             Text("Bookmark tempo, meter, swing, and practice settings.")
         }
         .alert(
-            "Rename song",
+            "Rename section",
             isPresented: Binding(
-                get: { renamingSong != nil },
-                set: { if !$0 { renamingSong = nil } }
+                get: { renamingSection != nil },
+                set: { if !$0 { renamingSection = nil } }
             )
         ) {
             TextField("Name", text: $renameText)
-            Button("Cancel", role: .cancel) { renamingSong = nil }
+            Button("Cancel", role: .cancel) { renamingSection = nil }
             Button("Save") {
-                if let song = renamingSong {
-                    bridge.renameSong(id: song.id, name: renameText)
+                if let section = renamingSection {
+                    bridge.renameSection(id: section.id, name: renameText)
                 }
-                renamingSong = nil
+                renamingSection = nil
             }
         }
         .alert("New setlist", isPresented: $showNewSetlistDialog) {
@@ -204,7 +204,7 @@ struct MetronomeView: View {
                         practiceBody
                     }
                     .padding(.top, isWide ? 22 : 14)
-                    expandable("SONGS", summary: bridge.songs.isEmpty ? "bookmark to save" : "\(bridge.songs.count) saved", expanded: $songsExpanded) {
+                    expandable("SECTIONS", summary: bridge.savedSections.isEmpty ? "bookmark to save" : "\(bridge.savedSections.count) saved", expanded: $sectionsExpanded) {
                         songsBody
                     }
                     .padding(.top, gap)
@@ -261,7 +261,7 @@ struct MetronomeView: View {
                         expandable("PRACTICE", summary: practiceSummary, expanded: $practiceExpanded) {
                             practiceBody
                         }
-                        expandable("SONGS", summary: bridge.songs.isEmpty ? "bookmark to save" : "\(bridge.songs.count) saved", expanded: $songsExpanded) {
+                        expandable("SECTIONS", summary: bridge.savedSections.isEmpty ? "bookmark to save" : "\(bridge.savedSections.count) saved", expanded: $sectionsExpanded) {
                             songsBody
                         }
                         expandable("SETLISTS", summary: setlistSummary, expanded: $setlistsExpanded) {
@@ -294,7 +294,7 @@ struct MetronomeView: View {
             }
             Spacer()
             iconButton("bookmark.fill", tint: palette.copper) {
-                saveName = bridge.suggestedSongName()
+                saveName = bridge.suggestedSectionName()
                 showSaveDialog = true
             }
             iconButton(
@@ -676,16 +676,16 @@ struct MetronomeView: View {
 
     private var songsBody: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if bridge.activeSongId != nil {
-                ChoiceChip(label: "Update active", selected: false, action: bridge.updateActiveSong)
+            if bridge.activeSavedSectionId != nil {
+                ChoiceChip(label: "Update active", selected: false, action: bridge.updateActiveSection)
             }
-            if bridge.songs.isEmpty {
+            if bridge.savedSections.isEmpty {
                 Text("Bookmark tempo, meter, swing, and practice settings. Long-press to rename.")
                     .font(.system(size: 13))
                     .foregroundStyle(palette.ash)
             } else {
-                ForEach(bridge.songs) { song in
-                    let selected = bridge.activeSongId == song.id
+                ForEach(bridge.savedSections) { song in
+                    let selected = bridge.activeSavedSectionId == song.id
                     HStack(alignment: .center, spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(song.name)
@@ -699,13 +699,13 @@ struct MetronomeView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
-                        .onTapGesture { bridge.loadSong(id: song.id) }
+                        .onTapGesture { bridge.loadSection(id: song.id) }
                         .onLongPressGesture {
-                            renamingSong = song
+                            renamingSection = song
                             renameText = song.name
                         }
                         Button {
-                            bridge.deleteSong(id: song.id)
+                            bridge.deleteSection(id: song.id)
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 14, weight: .semibold))

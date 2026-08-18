@@ -35,8 +35,8 @@ final class MetronomeBridge: ObservableObject {
     @Published private(set) var listenProgress: Float = 0
     @Published private(set) var listenPhase: ListenPhase = .idle
     @Published private(set) var listenDebug: ListenDebugSnapshot? = nil
-    @Published private(set) var songs: [SongRow] = []
-    @Published private(set) var activeSongId: String? = nil
+    @Published private(set) var savedSections: [SavedSectionRow] = []
+    @Published private(set) var activeSavedSectionId: String? = nil
     @Published private(set) var setlists: [SetlistRow] = []
     @Published private(set) var activeSetlistId: String? = nil
     @Published private(set) var activeSectionIndex: Int = -1
@@ -74,7 +74,7 @@ final class MetronomeBridge: ObservableObject {
         case failed
     }
 
-    struct SongRow: Identifiable, Equatable {
+    struct SavedSectionRow: Identifiable, Equatable {
         let id: String
         let name: String
         let detail: String
@@ -397,38 +397,38 @@ final class MetronomeBridge: ObservableObject {
         refreshFromState()
     }
 
-    /// Prefill for the save-song dialog (matches SongPreset.autoName).
-    func suggestedSongName() -> String {
+    /// Prefill for the save-section dialog (matches Section.autoName).
+    func suggestedSectionName() -> String {
         "\(bpm) · \(meterLabel) · \(subdivisionLabel)"
     }
 
-    func saveSong(name: String? = nil) {
-        controller.saveCurrentSong(name: name)
+    func saveSection(name: String? = nil) {
+        controller.saveCurrentSection(name: name)
         refreshFromState()
     }
 
-    func updateActiveSong() {
-        controller.updateActiveSong()
+    func updateActiveSection() {
+        controller.updateActiveSection()
         refreshFromState()
     }
 
-    func renameSong(id: String, name: String) {
-        if let song = ui?.songs.first(where: { $0.id == id }) {
-            controller.renameSong(song: song, name: name)
+    func renameSection(id: String, name: String) {
+        if let section = ui?.savedSections.first(where: { $0.id == id }) {
+            controller.renameSection(section: section, name: name)
         }
         refreshFromState()
     }
 
-    func loadSong(id: String) {
-        if let song = ui?.songs.first(where: { $0.id == id }) {
-            controller.loadSong(song: song)
+    func loadSection(id: String) {
+        if let section = ui?.savedSections.first(where: { $0.id == id }) {
+            controller.loadSection(section: section)
         }
         refreshFromState()
     }
 
-    func deleteSong(id: String) {
-        if let song = ui?.songs.first(where: { $0.id == id }) {
-            controller.deleteSong(song: song)
+    func deleteSection(id: String) {
+        if let section = ui?.savedSections.first(where: { $0.id == id }) {
+            controller.deleteSection(section: section)
         }
         refreshFromState()
     }
@@ -481,35 +481,13 @@ final class MetronomeBridge: ObservableObject {
     }
 
     func setSectionBars(setlistId: String, sectionId: String, bars: Int) {
-        guard let current = rawSection(setlistId: setlistId, sectionId: sectionId) else { return }
-        let nextBars = Int32(max(0, bars))
-        let next = SetSection(
-            id: current.id,
-            label: current.label,
-            config: current.config,
-            bars: nextBars,
-            autoAdvance: nextBars == 0 ? false : current.autoAdvance
-        )
-        controller.updateSection(setlistId: setlistId, section: next)
+        controller.setSectionBars(setlistId: setlistId, sectionId: sectionId, bars: Int32(max(0, bars)))
         refreshFromState()
     }
 
     func setSectionAutoAdvance(setlistId: String, sectionId: String, auto: Bool) {
-        guard let current = rawSection(setlistId: setlistId, sectionId: sectionId) else { return }
-        let next = SetSection(
-            id: current.id,
-            label: current.label,
-            config: current.config,
-            bars: current.bars,
-            autoAdvance: auto
-        )
-        controller.updateSection(setlistId: setlistId, section: next)
+        controller.setSectionAutoAdvance(setlistId: setlistId, sectionId: sectionId, autoAdvance: auto)
         refreshFromState()
-    }
-
-    private func rawSection(setlistId: String, sectionId: String) -> SetSection? {
-        ui?.setlists.first(where: { $0.id == setlistId })?
-            .sections.first(where: { $0.id == sectionId })
     }
 
     func startListen() {
@@ -655,8 +633,8 @@ final class MetronomeBridge: ObservableObject {
         assignIfChanged(&beatAtMs, s.beatAtMs)
         assignIfChanged(&isAccentBeat, s.isAccentBeat)
 
-        let nextActiveSongId = s.activeSongId
-        if activeSongId != nextActiveSongId { activeSongId = nextActiveSongId }
+        let nextActiveSavedSectionId = s.activeSavedSectionId
+        if activeSavedSectionId != nextActiveSavedSectionId { activeSavedSectionId = nextActiveSavedSectionId }
 
         let nextActiveSetlistId = s.activeSetlistId
         if activeSetlistId != nextActiveSetlistId { activeSetlistId = nextActiveSetlistId }
@@ -674,30 +652,24 @@ final class MetronomeBridge: ObservableObject {
         if nextAccents != beatAccents { beatAccents = nextAccents }
         assignIfChanged(&accentsCustomized, s.accentsCustomized)
 
-        let nextSongs: [SongRow] = s.songs.map { song in
-            var detail = "\(Int(song.bpm)) · \(song.timeSignature.label) · \(song.subdivision.label)"
-            if song.swing.label != "Off" { detail += " · \(song.swing.label)" }
-            if song.groupTempo { detail += " · dotted" }
-            if Int(song.mutePattern.silentBars) > 0 { detail += " · mute \(song.mutePattern.label)" }
-            if Int(song.countInBars) > 0 { detail += " · in \(Int(song.countInBars))" }
-            return SongRow(id: song.id, name: song.name, detail: detail)
+        let nextSaved: [SavedSectionRow] = s.savedSections.map { section in
+            var detail = "\(Int(section.bpm)) · \(section.timeSignature.label) · \(section.subdivision.label)"
+            if section.swing.label != "Off" { detail += " · \(section.swing.label)" }
+            if section.groupTempo { detail += " · dotted" }
+            if Int(section.mutePattern.silentBars) > 0 { detail += " · mute \(section.mutePattern.label)" }
+            if Int(section.countInBars) > 0 { detail += " · in \(Int(section.countInBars))" }
+            return SavedSectionRow(id: section.id, name: section.displayName(), detail: detail)
         }
-        if nextSongs != songs { songs = nextSongs }
+        if nextSaved != savedSections { savedSections = nextSaved }
 
         let nextSetlists: [SetlistRow] = s.setlists.map { setlist in
-            let sections: [SectionRow] = setlist.sections.map { section in
-                let summary: String
-                if let label = section.label, !label.isEmpty {
-                    summary = label
-                } else {
-                    let cfg = section.config
-                    summary = "\(Int(cfg.bpm)) · \(cfg.timeSignature.label) · \(cfg.subdivision.label)"
-                }
+            let slots = s.setlistSlots(setlist: setlist)
+            let sections: [SectionRow] = slots.map { slot in
                 return SectionRow(
-                    id: section.id,
-                    summary: summary,
-                    bars: Int(section.bars),
-                    autoAdvance: section.autoAdvance
+                    id: slot.section.id,
+                    summary: slot.section.displayName(),
+                    bars: Int(slot.section.bars),
+                    autoAdvance: slot.autoAdvance
                 )
             }
             return SetlistRow(

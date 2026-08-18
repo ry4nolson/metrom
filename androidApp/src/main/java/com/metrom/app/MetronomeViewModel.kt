@@ -23,9 +23,8 @@ import com.metrom.app.platform.AndroidUiClock
 import com.metrom.app.garmin.GarminCompanion
 import com.metrom.shared.audio.SampleToneCache
 import com.metrom.shared.garmin.GarminProtocol
-import com.metrom.shared.data.SetSection
-import com.metrom.shared.data.Setlist
-import com.metrom.shared.data.SongPreset
+import com.metrom.shared.library.Section
+import com.metrom.shared.library.Setlist
 import com.metrom.shared.detect.DetectDebug
 import com.metrom.shared.detect.DetectState
 import com.metrom.shared.domain.AccentNote
@@ -245,18 +244,20 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     fun setTrainerStep(step: Int) = controller.setTrainerStep(step)
     fun setTrainerEveryBars(bars: Int) = controller.setTrainerEveryBars(bars)
     fun toggleTrainerAutoStop() = controller.toggleTrainerAutoStop()
-    fun saveCurrentSong(name: String? = null) = controller.saveCurrentSong(name)
-    fun loadSong(song: SongPreset) = controller.loadSong(song)
-    fun deleteSong(song: SongPreset) = controller.deleteSong(song)
-    fun renameSong(song: SongPreset, name: String) = controller.renameSong(song, name)
-    fun updateActiveSong() = controller.updateActiveSong()
+    fun saveCurrentSection(name: String? = null) = controller.saveCurrentSection(name)
+    fun loadSection(section: Section) = controller.loadSection(section)
+    fun deleteSection(section: Section) = controller.deleteSection(section)
+    fun renameSection(section: Section, name: String) = controller.renameSection(section, name)
+    fun updateActiveSection() = controller.updateActiveSection()
     fun createSetlist(name: String) = controller.createSetlist(name)
     fun renameSetlist(id: String, name: String) = controller.renameSetlist(id, name)
     fun deleteSetlist(id: String) = controller.deleteSetlist(id)
     fun addSectionFromCurrent(setlistId: String) = controller.addSectionFromCurrent(setlistId)
     fun removeSection(setlistId: String, sectionId: String) = controller.removeSection(setlistId, sectionId)
     fun moveSection(setlistId: String, from: Int, to: Int) = controller.moveSection(setlistId, from, to)
-    fun updateSection(setlistId: String, section: SetSection) = controller.updateSection(setlistId, section)
+    fun setSectionBars(setlistId: String, sectionId: String, bars: Int) = controller.setSectionBars(setlistId, sectionId, bars)
+    fun setSectionAutoAdvance(setlistId: String, sectionId: String, autoAdvance: Boolean) =
+        controller.setSectionAutoAdvance(setlistId, sectionId, autoAdvance)
     fun loadSetlist(setlist: Setlist) = controller.loadSetlist(setlist)
     fun advanceSection() = controller.advanceSection()
     fun exitSetlist() = controller.exitSetlist()
