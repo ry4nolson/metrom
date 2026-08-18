@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -46,8 +48,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import com.metrom.app.ui.theme.Ash
 import com.metrom.app.ui.theme.BackgroundBottom
 import com.metrom.app.ui.theme.BackgroundTop
@@ -339,12 +343,29 @@ private fun HsvPickerDialog(
     onHex: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val start = remember(hex) { hsvFromHex(hex) }
-    var hue by remember(hex) { mutableFloatStateOf(start[0]) }
-    var sat by remember(hex) { mutableFloatStateOf(start[1]) }
-    var value by remember(hex) { mutableFloatStateOf(start[2]) }
-    val color = Color.hsv(hue, sat, value)
-    val nextHex = color.toArgb().toUInt().toString(16).uppercase().takeLast(6)
+    var color by remember(hex) { mutableStateOf(hexColor(hex)) }
+    var hexText by remember(hex) { mutableStateOf("#${colorHex(color)}") }
+    var lockedHue by remember(hex) { mutableFloatStateOf(hsvOf(color)[0]) }
+    val hsv = hsvOf(color)
+    val hue = if (hsv[1] < 0.001f) lockedHue else hsv[0]
+    val sat = hsv[1]
+    val value = hsv[2]
+    val rgb = rgbOf(color)
+    val hexValid = ColorTheme.normalizeHex(hexText) != null
+    val nextHex = colorHex(color)
+    val sliderColors = SliderDefaults.colors(
+        thumbColor = Ember,
+        activeTrackColor = Ember,
+        inactiveTrackColor = InkLine
+    )
+    val maxDialogHeight = LocalConfiguration.current.screenHeightDp.dp * 0.88f
+
+    fun applyColor(next: Color) {
+        color = next
+        val nextHsv = hsvOf(next)
+        if (nextHsv[1] >= 0.001f) lockedHue = nextHsv[0]
+        hexText = "#${colorHex(next)}"
+    }
 
     BackHandler(onBack = onDismiss)
     Box(
@@ -357,9 +378,16 @@ private fun HsvPickerDialog(
         Column(
             modifier = Modifier
                 .padding(24.dp)
+                .fillMaxWidth()
+                .heightIn(max = maxDialogHeight)
                 .clip(RoundedCornerShape(18.dp))
                 .background(InkElevated)
                 .border(1.dp, InkLine, RoundedCornerShape(18.dp))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = {}
+                )
                 .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -372,38 +400,92 @@ private fun HsvPickerDialog(
                     .background(color)
                     .border(1.dp, InkLine, RoundedCornerShape(12.dp))
             )
-            Text("#$nextHex", style = MaterialTheme.typography.labelMedium, color = Ash)
-            SliderLabel("Hue")
-            Slider(
-                value = hue,
-                onValueChange = { hue = it },
-                valueRange = 0f..360f,
-                colors = SliderDefaults.colors(
-                    thumbColor = Ember,
-                    activeTrackColor = Ember,
-                    inactiveTrackColor = InkLine
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = hexText,
+                    onValueChange = { typed ->
+                        hexText = typed
+                        val parsed = ColorTheme.normalizeHex(typed)
+                        if (parsed != null) {
+                            val next = hexColor(parsed)
+                            color = next
+                            val nextHsv = hsvOf(next)
+                            if (nextHsv[1] >= 0.001f) lockedHue = nextHsv[0]
+                        }
+                    },
+                    singleLine = true,
+                    label = { Text("HEX") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = if (hexValid) Bone else Ash,
+                        unfocusedTextColor = if (hexValid) Bone else Ash,
+                        focusedBorderColor = if (hexValid) Ember else Ash,
+                        unfocusedBorderColor = if (hexValid) InkLine else Ash,
+                        focusedLabelColor = Ash,
+                        unfocusedLabelColor = Ash,
+                        cursorColor = Ember,
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 )
-            )
-            SliderLabel("Saturation")
-            Slider(
-                value = sat,
-                onValueChange = { sat = it },
-                colors = SliderDefaults.colors(
-                    thumbColor = Ember,
-                    activeTrackColor = Ember,
-                    inactiveTrackColor = InkLine
+                SliderLabel("Hue", hue.roundToInt().toString())
+                Slider(
+                    value = hue,
+                    onValueChange = {
+                        lockedHue = it
+                        applyColor(Color.hsv(it, sat, value))
+                    },
+                    valueRange = 0f..360f,
+                    colors = sliderColors
                 )
-            )
-            SliderLabel("Value")
-            Slider(
-                value = value,
-                onValueChange = { value = it },
-                colors = SliderDefaults.colors(
-                    thumbColor = Ember,
-                    activeTrackColor = Ember,
-                    inactiveTrackColor = InkLine
+                SliderLabel("Saturation", "${(sat * 100f).roundToInt()}%")
+                Slider(
+                    value = sat,
+                    onValueChange = { applyColor(Color.hsv(hue, it, value)) },
+                    valueRange = 0f..1f,
+                    colors = sliderColors
                 )
-            )
+                SliderLabel("Value", "${(value * 100f).roundToInt()}%")
+                Slider(
+                    value = value,
+                    onValueChange = { applyColor(Color.hsv(hue, sat, it)) },
+                    valueRange = 0f..1f,
+                    colors = sliderColors
+                )
+                SliderLabel("Red", rgb[0].toString())
+                Slider(
+                    value = rgb[0].toFloat(),
+                    onValueChange = {
+                        applyColor(Color(it.roundToInt().coerceIn(0, 255), rgb[1], rgb[2]))
+                    },
+                    valueRange = 0f..255f,
+                    steps = 254,
+                    colors = sliderColors
+                )
+                SliderLabel("Green", rgb[1].toString())
+                Slider(
+                    value = rgb[1].toFloat(),
+                    onValueChange = {
+                        applyColor(Color(rgb[0], it.roundToInt().coerceIn(0, 255), rgb[2]))
+                    },
+                    valueRange = 0f..255f,
+                    steps = 254,
+                    colors = sliderColors
+                )
+                SliderLabel("Blue", rgb[2].toString())
+                Slider(
+                    value = rgb[2].toFloat(),
+                    onValueChange = {
+                        applyColor(Color(rgb[0], rgb[1], it.roundToInt().coerceIn(0, 255)))
+                    },
+                    valueRange = 0f..255f,
+                    steps = 254,
+                    colors = sliderColors
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     "CANCEL",
@@ -428,12 +510,30 @@ private fun HsvPickerDialog(
 }
 
 @Composable
-private fun SliderLabel(text: String) {
-    Text(text, style = MaterialTheme.typography.labelMedium, color = Mist)
+private fun SliderLabel(text: String, value: String? = null) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text, style = MaterialTheme.typography.labelMedium, color = Mist)
+        if (value != null) {
+            Text(value, style = MaterialTheme.typography.labelMedium, color = Ash)
+        }
+    }
 }
 
-private fun hsvFromHex(hex: String): FloatArray {
+private fun colorHex(color: Color): String =
+    color.toArgb().toUInt().toString(16).uppercase().takeLast(6)
+
+private fun hsvOf(color: Color): FloatArray {
     val hsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(hexColor(hex).toArgb(), hsv)
+    android.graphics.Color.colorToHSV(color.toArgb(), hsv)
     return hsv
 }
+
+private fun rgbOf(color: Color): IntArray = intArrayOf(
+    (color.red * 255f).roundToInt().coerceIn(0, 255),
+    (color.green * 255f).roundToInt().coerceIn(0, 255),
+    (color.blue * 255f).roundToInt().coerceIn(0, 255),
+)
