@@ -652,6 +652,115 @@ class MetronomeController(
         )
     }
 
+    fun setSectionBpm(setlistId: String, sectionId: String, bpm: Int) {
+        mutateSectionConfig(setlistId, sectionId) {
+            it.copy(bpm = bpm.coerceIn(MetronomeLimits.MIN_BPM, MetronomeLimits.MAX_BPM))
+        }
+    }
+
+    fun setSectionTimeSignature(setlistId: String, sectionId: String, signature: TimeSignature) {
+        val normalized = TimeSignature.normalize(signature.beats, signature.noteValue) ?: return
+        mutateSectionConfig(setlistId, sectionId) { config ->
+            config.copy(
+                timeSignature = normalized,
+                beatAccents = BeatAccent.defaultPattern(normalized.beats, normalized.noteValue),
+                groupTempo = config.groupTempo && normalized.isCompound,
+            )
+        }
+    }
+
+    fun setSectionSubdivision(setlistId: String, sectionId: String, subdivision: Subdivision) {
+        mutateSectionConfig(setlistId, sectionId) { it.copy(subdivision = subdivision) }
+    }
+
+    fun setSectionSwing(setlistId: String, sectionId: String, swing: SwingFeel) {
+        mutateSectionConfig(setlistId, sectionId) { it.copy(swing = swing) }
+    }
+
+    fun setSectionTone(setlistId: String, sectionId: String, tone: MetronomeTone) {
+        val applied = availableTones().find { it.id == tone.id } ?: MetronomeTone.DEFAULT
+        mutateSectionConfig(setlistId, sectionId) { it.copy(tone = applied) }
+    }
+
+    fun setSectionAccentNote(setlistId: String, sectionId: String, note: AccentNote) {
+        mutateSectionConfig(setlistId, sectionId) { it.copy(accentNote = note) }
+    }
+
+    fun setSectionRestNote(setlistId: String, sectionId: String, note: AccentNote) {
+        mutateSectionConfig(setlistId, sectionId) { it.copy(restNote = note) }
+    }
+
+    fun setSectionBeatAccents(setlistId: String, sectionId: String, levels: List<BeatAccent>) {
+        mutateSectionConfig(setlistId, sectionId) { config ->
+            config.copy(
+                beatAccents = BeatAccent.decode(
+                    BeatAccent.encode(levels),
+                    config.timeSignature.beats,
+                    config.timeSignature.noteValue,
+                ),
+            )
+        }
+    }
+
+    fun setSectionGroupTempo(setlistId: String, sectionId: String, enabled: Boolean) {
+        mutateSectionConfig(setlistId, sectionId) { config ->
+            config.copy(groupTempo = enabled && config.timeSignature.isCompound)
+        }
+    }
+
+    fun setSectionCountInBars(setlistId: String, sectionId: String, bars: Int) {
+        mutateSectionConfig(setlistId, sectionId) { it.copy(countInBars = bars.coerceIn(0, 4)) }
+    }
+
+    fun setSectionLabel(setlistId: String, sectionId: String, label: String?) {
+        mutateSection(setlistId, sectionId) {
+            it.copy(label = label?.trim()?.takeIf { trimmed -> trimmed.isNotEmpty() })
+        }
+    }
+
+    fun setSectionBars(setlistId: String, sectionId: String, bars: Int) {
+        mutateSection(setlistId, sectionId) { it.copy(bars = bars.coerceIn(0, SECTION_BARS_MAX)) }
+    }
+
+    fun captureCurrentIntoSection(setlistId: String, sectionId: String) {
+        val snapshot = snapshotPreset(_state.value)
+        mutateSection(setlistId, sectionId) { it.copy(config = snapshot) }
+    }
+
+    private fun mutateSectionConfig(
+        setlistId: String,
+        sectionId: String,
+        transform: (SongPreset) -> SongPreset,
+    ) {
+        mutateSection(setlistId, sectionId) { it.copy(config = transform(it.config)) }
+    }
+
+    private fun mutateSection(
+        setlistId: String,
+        sectionId: String,
+        transform: (SetSection) -> SetSection,
+    ) {
+        val section = _state.value.setlists
+            .firstOrNull { it.id == setlistId }
+            ?.sections
+            ?.firstOrNull { it.id == sectionId }
+            ?: return
+        updateSection(setlistId, transform(section))
+        maybeReapplyActiveSection(setlistId, sectionId)
+    }
+
+    /** Stopped + this section is active → applySongSetup. Playing → persist only. */
+    private fun maybeReapplyActiveSection(setlistId: String, sectionId: String) {
+        val s = _state.value
+        if (s.isPlaying) return
+        if (!s.inSetMode || s.activeSetlistId != setlistId) return
+        val setlist = s.setlists.firstOrNull { it.id == setlistId } ?: return
+        val index = setlist.sections.indexOfFirst { it.id == sectionId }
+        if (index != s.activeSectionIndex) return
+        val section = setlist.sections.getOrNull(index) ?: return
+        applySongSetup(section.config)
+    }
+
     fun loadSetlist(setlist: Setlist) {
         val resolved = _state.value.setlists.firstOrNull { it.id == setlist.id } ?: setlist
         pendingSetNav = PendingSetNav.NONE
@@ -1101,6 +1210,7 @@ class MetronomeController(
 
     companion object {
         private const val PREF_TONE_ID = "toneId"
+        private const val SECTION_BARS_MAX = 999
     }
 }
 
