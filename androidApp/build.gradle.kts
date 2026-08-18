@@ -70,6 +70,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -82,6 +83,8 @@ android {
 
 dependencies {
     implementation(project(":shared"))
+    implementation("com.garmin.connectiq:ciq-companion-app-sdk:2.4.0@aar")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)

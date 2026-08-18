@@ -47,6 +47,10 @@ Tone samples must land at `Metrom.app/tones/...` (not under a top-level `Resourc
 
 ## Feature parity (v1)
 
-BPM / meter / subdivisions / swing / accents / group tempo, synth + chug/kick,
-ONE/OTHERS pitch, tap tempo, haptics, count-in, mute bars, tempo trainer, songs,
-background audio + Now Playing, mic listen (pick from candidates; disabled while playing).
+Matches Android for practice features: BPM (nudge / drag / presets / tap), meter,
+subdivisions, swing, accents, group tempo, synth + chug/kick, ONE/OTHERS pitch
+(when tone supports it), haptics, count-in, mute bars with live cycle strip, full
+tempo trainer (target / step / every-N / auto-stop), named songs (save / rename /
+update active), background audio + Now Playing, mic listen with progress / cancel /
+permission (disabled while playing), and Listen Debug (waveform / onset / ACF /
+candidates) after a capture.

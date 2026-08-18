@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Connect IQ TETHERED (simulator) binds a ServerSocket on :7381. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Beat haptics (ViewModel vibrator). Install-time permission. -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
@@ -15,6 +18,10 @@
 
     <!-- Transport notification on Android 13+. Optional at runtime — audio still works if denied. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <queries>
+        <package android:name="com.garmin.android.apps.connectmobile" />
+    </queries>
 
     <application
         android:name=".MetromApplication"

@@ -7,101 +7,110 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		197557AB9146BBC0A3D43D0F /* MetromTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CBF962736A230E32E701D7 /* MetromTheme.swift */; };
-		1C6EB65554C9A9435F7AED08 /* MetronomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C902AE08B3604E194D476A81 /* MetronomeView.swift */; };
-		400769D160DAB3DC4CF1D401 /* MetronomeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B755B63570F4125B33DA82E8 /* MetronomeBridge.swift */; };
-		60F441B6F114AAF2C582E777 /* AVAudioPcmSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BA9954A1EC15A643B8F7F2D /* AVAudioPcmSink.swift */; };
-		8A200F9236956244695171A3 /* tones in Resources */ = {isa = PBXBuildFile; fileRef = 8F2737CE52C9E2CD6A6572E4 /* tones */; };
-		91207B60E666078945884BCC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 58AB023F704A1BD290388DB9 /* Assets.xcassets */; };
-		C02428C5B4DE93DD401D8ACE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5A8DD9C612A0A35A1A0F269D /* Foundation.framework */; };
-		D12B845565FEC70A258E80A4 /* MetromApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0406FF4E3041EEE06457619A /* MetromApp.swift */; };
+		0917A271C1D35A505586FB61 /* MetromTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D6B023984F70BA941DCDB4 /* MetromTheme.swift */; };
+		24BB8802DFB1AC2F97E544EC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 907CD3E79D1CE55DC8736E4D /* Assets.xcassets */; };
+		5DD2EFE00FC63886459EDF69 /* AVAudioPcmSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 507B13090253BE4AD08B5BC9 /* AVAudioPcmSink.swift */; };
+		5F90DFE651B7ACC21E36AEE8 /* ThemeEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6EE5003A39EC84B4CDCFCAE /* ThemeEditor.swift */; };
+		69C8E1EE860B21202F5242A6 /* MetronomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F40CA5C426751286414424 /* MetronomeView.swift */; };
+		76D999A96C99E788A0E30820 /* MetronomeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C73F15F0BCC187274E21CD /* MetronomeBridge.swift */; };
+		BFDE8B58C4A9AAC81EC5C5C5 /* ListenDebugPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4534A0430743EA8E3920607B /* ListenDebugPanel.swift */; };
+		C4994913DB1B2CB259CB2043 /* tones in Resources */ = {isa = PBXBuildFile; fileRef = A692CF1E202AE7EAF2CBAF62 /* tones */; };
+		DD4B2548F39D56DAADE1CEA0 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D99DE3DB436233B96B95AC39 /* Foundation.framework */; };
+		E5B23B872773FEBAE04E0520 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5CCEB7FB01F2AA6F8D2B3CF /* SettingsView.swift */; };
+		FB1CD5F6EEF7DC6B6C31BFAF /* MetromApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C79EBA46BA9FBD4D2F201A /* MetromApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0406FF4E3041EEE06457619A /* MetromApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetromApp.swift; sourceTree = "<group>"; };
-		17FF531E12889E14930F0404 /* Metrom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Metrom.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		40CBF962736A230E32E701D7 /* MetromTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetromTheme.swift; sourceTree = "<group>"; };
-		58AB023F704A1BD290388DB9 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		5A8DD9C612A0A35A1A0F269D /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		7BA9954A1EC15A643B8F7F2D /* AVAudioPcmSink.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AVAudioPcmSink.swift; sourceTree = "<group>"; };
-		8F2737CE52C9E2CD6A6572E4 /* tones */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = folder; name = tones; path = Resources/tones; sourceTree = "<group>"; };
-		B755B63570F4125B33DA82E8 /* MetronomeBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetronomeBridge.swift; sourceTree = "<group>"; };
-		C902AE08B3604E194D476A81 /* MetronomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetronomeView.swift; sourceTree = "<group>"; };
-		D087B709006F39544CF0E5AA /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4534A0430743EA8E3920607B /* ListenDebugPanel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ListenDebugPanel.swift; sourceTree = "<group>"; };
+		507B13090253BE4AD08B5BC9 /* AVAudioPcmSink.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AVAudioPcmSink.swift; sourceTree = "<group>"; };
+		57D6B023984F70BA941DCDB4 /* MetromTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetromTheme.swift; sourceTree = "<group>"; };
+		59C73F15F0BCC187274E21CD /* MetronomeBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetronomeBridge.swift; sourceTree = "<group>"; };
+		907CD3E79D1CE55DC8736E4D /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A0C79EBA46BA9FBD4D2F201A /* MetromApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetromApp.swift; sourceTree = "<group>"; };
+		A692CF1E202AE7EAF2CBAF62 /* tones */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = folder; name = tones; path = Resources/tones; sourceTree = "<group>"; };
+		C0EF6CEB190B95DCD324C951 /* Metrom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Metrom.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C5CCEB7FB01F2AA6F8D2B3CF /* SettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		C6EE5003A39EC84B4CDCFCAE /* ThemeEditor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemeEditor.swift; sourceTree = "<group>"; };
+		D5C7F959B0AD5831A3B7DA5F /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D99DE3DB436233B96B95AC39 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		F4F40CA5C426751286414424 /* MetronomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetronomeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		E6DFBFF10E8DB1035D47EAA8 /* Frameworks */ = {
+		73D8D90D723DC38D292CC206 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C02428C5B4DE93DD401D8ACE /* Foundation.framework in Frameworks */,
+				DD4B2548F39D56DAADE1CEA0 /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		347FEB5D78B8A32D32282E05 /* iOS */ = {
+		099986D797210D3CCA39BA75 = {
 			isa = PBXGroup;
 			children = (
-				5A8DD9C612A0A35A1A0F269D /* Foundation.framework */,
+				C1221FF9DEE661F7B0C2A45A /* Products */,
+				EAE15BCAA55957BC4139B904 /* Frameworks */,
+				BFB1A21159285EBC01ED8C07 /* Metrom */,
 			);
-			name = iOS;
 			sourceTree = "<group>";
 		};
-		3528CC0C1A048DCB145CE46D /* Frameworks */ = {
+		BFB1A21159285EBC01ED8C07 /* Metrom */ = {
 			isa = PBXGroup;
 			children = (
-				347FEB5D78B8A32D32282E05 /* iOS */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		6DE6095FCF6253131BDFF79E /* Metrom */ = {
-			isa = PBXGroup;
-			children = (
-				7BA9954A1EC15A643B8F7F2D /* AVAudioPcmSink.swift */,
-				0406FF4E3041EEE06457619A /* MetromApp.swift */,
-				40CBF962736A230E32E701D7 /* MetromTheme.swift */,
-				B755B63570F4125B33DA82E8 /* MetronomeBridge.swift */,
-				C902AE08B3604E194D476A81 /* MetronomeView.swift */,
-				8F2737CE52C9E2CD6A6572E4 /* tones */,
-				58AB023F704A1BD290388DB9 /* Assets.xcassets */,
-				D087B709006F39544CF0E5AA /* Info.plist */,
+				507B13090253BE4AD08B5BC9 /* AVAudioPcmSink.swift */,
+				4534A0430743EA8E3920607B /* ListenDebugPanel.swift */,
+				A0C79EBA46BA9FBD4D2F201A /* MetromApp.swift */,
+				57D6B023984F70BA941DCDB4 /* MetromTheme.swift */,
+				59C73F15F0BCC187274E21CD /* MetronomeBridge.swift */,
+				F4F40CA5C426751286414424 /* MetronomeView.swift */,
+				C5CCEB7FB01F2AA6F8D2B3CF /* SettingsView.swift */,
+				C6EE5003A39EC84B4CDCFCAE /* ThemeEditor.swift */,
+				A692CF1E202AE7EAF2CBAF62 /* tones */,
+				907CD3E79D1CE55DC8736E4D /* Assets.xcassets */,
+				D5C7F959B0AD5831A3B7DA5F /* Info.plist */,
 			);
 			name = Metrom;
 			path = Metrom;
 			sourceTree = "<group>";
 		};
-		CBDF0D4D23D767B328544D8B /* Products */ = {
+		C1221FF9DEE661F7B0C2A45A /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				17FF531E12889E14930F0404 /* Metrom.app */,
+				C0EF6CEB190B95DCD324C951 /* Metrom.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		E65F11DB20E48B0DE44E7A42 = {
+		EAE15BCAA55957BC4139B904 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				CBDF0D4D23D767B328544D8B /* Products */,
-				3528CC0C1A048DCB145CE46D /* Frameworks */,
-				6DE6095FCF6253131BDFF79E /* Metrom */,
+				F909950530020AC5D321F39D /* iOS */,
 			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		F909950530020AC5D321F39D /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				D99DE3DB436233B96B95AC39 /* Foundation.framework */,
+			);
+			name = iOS;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		AF979F8EEB04F79EB901C0C6 /* Metrom */ = {
+		B62505622077DBCA5660ECFD /* Metrom */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 6042E7EC2D0CF5DA198F1A60 /* Build configuration list for PBXNativeTarget "Metrom" */;
+			buildConfigurationList = 6CD0A8D7A3EB75A5E57972F3 /* Build configuration list for PBXNativeTarget "Metrom" */;
 			buildPhases = (
-				CCFB782832306B7B1389942B /* Compile MetromShared */,
-				C58D03CB03D47758C1330A85 /* Sources */,
-				E6DFBFF10E8DB1035D47EAA8 /* Frameworks */,
-				E986D85C3A64EC3DFA609F45 /* Resources */,
+				5F7A2A8CA1E4FF37E14C15AB /* Compile MetromShared */,
+				0DA758362D920BE684863860 /* Sources */,
+				73D8D90D723DC38D292CC206 /* Frameworks */,
+				C1BDA9165BC8677580AEAA1E /* Resources */,
 			);
 			buildRules = (
 			);
@@ -109,19 +118,19 @@
 			);
 			name = Metrom;
 			productName = Metrom;
-			productReference = 17FF531E12889E14930F0404 /* Metrom.app */;
+			productReference = C0EF6CEB190B95DCD324C951 /* Metrom.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		294DE832A09CC2FD7A6334EE /* Project object */ = {
+		F319370CF31E2CFB34F2848F /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				LastSwiftUpdateCheck = 1100;
 				LastUpgradeCheck = 1100;
 			};
-			buildConfigurationList = BB6A78C86CE5F931A5D143F9 /* Build configuration list for PBXProject "Metrom" */;
+			buildConfigurationList = A6E1262CD19827B023CEFC65 /* Build configuration list for PBXProject "Metrom" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -129,30 +138,30 @@
 				en,
 				Base,
 			);
-			mainGroup = E65F11DB20E48B0DE44E7A42;
-			productRefGroup = CBDF0D4D23D767B328544D8B /* Products */;
+			mainGroup = 099986D797210D3CCA39BA75;
+			productRefGroup = C1221FF9DEE661F7B0C2A45A /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				AF979F8EEB04F79EB901C0C6 /* Metrom */,
+				B62505622077DBCA5660ECFD /* Metrom */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		E986D85C3A64EC3DFA609F45 /* Resources */ = {
+		C1BDA9165BC8677580AEAA1E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8A200F9236956244695171A3 /* tones in Resources */,
-				91207B60E666078945884BCC /* Assets.xcassets in Resources */,
+				C4994913DB1B2CB259CB2043 /* tones in Resources */,
+				24BB8802DFB1AC2F97E544EC /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		CCFB782832306B7B1389942B /* Compile MetromShared */ = {
+		5F7A2A8CA1E4FF37E14C15AB /* Compile MetromShared */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -174,22 +183,25 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		C58D03CB03D47758C1330A85 /* Sources */ = {
+		0DA758362D920BE684863860 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				60F441B6F114AAF2C582E777 /* AVAudioPcmSink.swift in Sources */,
-				D12B845565FEC70A258E80A4 /* MetromApp.swift in Sources */,
-				197557AB9146BBC0A3D43D0F /* MetromTheme.swift in Sources */,
-				400769D160DAB3DC4CF1D401 /* MetronomeBridge.swift in Sources */,
-				1C6EB65554C9A9435F7AED08 /* MetronomeView.swift in Sources */,
+				5DD2EFE00FC63886459EDF69 /* AVAudioPcmSink.swift in Sources */,
+				BFDE8B58C4A9AAC81EC5C5C5 /* ListenDebugPanel.swift in Sources */,
+				FB1CD5F6EEF7DC6B6C31BFAF /* MetromApp.swift in Sources */,
+				0917A271C1D35A505586FB61 /* MetromTheme.swift in Sources */,
+				76D999A96C99E788A0E30820 /* MetronomeBridge.swift in Sources */,
+				69C8E1EE860B21202F5242A6 /* MetronomeView.swift in Sources */,
+				E5B23B872773FEBAE04E0520 /* SettingsView.swift in Sources */,
+				5F90DFE651B7ACC21E36AEE8 /* ThemeEditor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		00EA1E95F5046B97D013436F /* Debug */ = {
+		352147D346DC86EB02D6995B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -229,7 +241,63 @@
 			};
 			name = Debug;
 		};
-		2246CD8E02B6CF8B9C3E1ADF /* Release */ = {
+		43CBAA1FF74C4977DC255F0C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		5361C0DD44C752DD2E29592E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -273,7 +341,7 @@
 			};
 			name = Release;
 		};
-		859A13CA161A60E9925642A8 /* Debug */ = {
+		BF98E4AE64B7890A7F2AB733 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -336,84 +404,28 @@
 			};
 			name = Debug;
 		};
-		CA4893BA74C31BB4A99C7119 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		6042E7EC2D0CF5DA198F1A60 /* Build configuration list for PBXNativeTarget "Metrom" */ = {
+		6CD0A8D7A3EB75A5E57972F3 /* Build configuration list for PBXNativeTarget "Metrom" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				2246CD8E02B6CF8B9C3E1ADF /* Release */,
-				00EA1E95F5046B97D013436F /* Debug */,
+				5361C0DD44C752DD2E29592E /* Release */,
+				352147D346DC86EB02D6995B /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		BB6A78C86CE5F931A5D143F9 /* Build configuration list for PBXProject "Metrom" */ = {
+		A6E1262CD19827B023CEFC65 /* Build configuration list for PBXProject "Metrom" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				859A13CA161A60E9925642A8 /* Debug */,
-				CA4893BA74C31BB4A99C7119 /* Release */,
+				BF98E4AE64B7890A7F2AB733 /* Debug */,
+				43CBAA1FF74C4977DC255F0C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = 294DE832A09CC2FD7A6334EE /* Project object */;
+	rootObject = F319370CF31E2CFB34F2848F /* Project object */;
 }

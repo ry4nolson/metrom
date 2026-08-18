@@ -20,7 +20,9 @@ import com.metrom.app.platform.AndroidLatencyPad
 import com.metrom.app.platform.AndroidMicCapture
 import com.metrom.app.platform.AndroidPrefsStore
 import com.metrom.app.platform.AndroidUiClock
+import com.metrom.app.garmin.GarminCompanion
 import com.metrom.shared.audio.SampleToneCache
+import com.metrom.shared.garmin.GarminProtocol
 import com.metrom.shared.data.SongPreset
 import com.metrom.shared.detect.DetectDebug
 import com.metrom.shared.detect.DetectState
@@ -30,10 +32,15 @@ import com.metrom.shared.domain.MutePattern
 import com.metrom.shared.domain.Subdivision
 import com.metrom.shared.domain.SwingFeel
 import com.metrom.shared.domain.TimeSignature
+import com.metrom.shared.domain.CustomMeterStore
 import com.metrom.shared.engine.MetronomeEngine
 import com.metrom.shared.practice.MetronomeController
 import com.metrom.shared.practice.MetronomeUiState
+import com.metrom.shared.theme.ColorTheme
+import com.metrom.shared.theme.ColorThemeStore
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class MetronomeViewModel(application: Application) : AndroidViewModel(application) {
     private val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -55,6 +62,10 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         latencyPad = AndroidLatencyPad(audioManager),
         sampleCache = sampleCache,
     )
+
+    private val garmin = GarminCompanion(application) { cmd ->
+        mainHandler.post { handleGarminCommand(cmd) }
+    }
 
     private val controller = MetronomeController(
         prefs = prefs,
@@ -80,6 +91,15 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     val state: StateFlow<MetronomeUiState> = controller.state
     val detectState: StateFlow<DetectState> = controller.detectState
     val detectDebug: StateFlow<DetectDebug?> = controller.detectDebug
+
+    private val themeStore = ColorThemeStore(prefs)
+    private val _theme = MutableStateFlow(themeStore.load())
+    val theme: StateFlow<ColorTheme> = _theme.asStateFlow()
+    private val _savedThemes = MutableStateFlow(themeStore.saved())
+    val savedThemes: StateFlow<List<ColorTheme>> = _savedThemes.asStateFlow()
+    private val meterStore = CustomMeterStore(prefs)
+    private val _customMeters = MutableStateFlow(meterStore.all())
+    val customMeters: StateFlow<List<TimeSignature>> = _customMeters.asStateFlow()
 
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
         mainHandler.post {
@@ -144,6 +164,20 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
                 if (!state.value.isPlaying) abandonAudioFocus()
             }
         }
+        garmin.bind(controller.state)
+    }
+
+    private fun handleGarminCommand(cmd: GarminProtocol.Command) {
+        when (cmd) {
+            GarminProtocol.Command.Sync -> Unit
+            GarminProtocol.Command.Toggle -> togglePlay()
+            GarminProtocol.Command.Play -> if (!state.value.isPlaying) start()
+            GarminProtocol.Command.Stop -> if (state.value.isPlaying) stop()
+            GarminProtocol.Command.Tap -> tapTempo()
+            is GarminProtocol.Command.Nudge -> nudgeBpm(cmd.delta)
+            is GarminProtocol.Command.SetBpm -> setBpm(cmd.bpm)
+            is GarminProtocol.Command.Meter -> setTimeSignature(TimeSignature(cmd.beats, cmd.note))
+        }
     }
 
     fun togglePlay() {
@@ -177,6 +211,17 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     fun setBpm(bpm: Int, persist: Boolean = true) = controller.setBpm(bpm, persist)
     fun nudgeBpm(delta: Int) = controller.nudgeBpm(delta)
     fun setTimeSignature(signature: TimeSignature) = controller.setTimeSignature(signature)
+
+    fun addCustomMeter(beats: Int, noteValue: Int) {
+        val sig = meterStore.add(beats, noteValue) ?: return
+        _customMeters.value = meterStore.all()
+        setTimeSignature(sig)
+    }
+
+    fun deleteCustomMeter(signature: TimeSignature) {
+        meterStore.remove(signature)
+        _customMeters.value = meterStore.all()
+    }
     fun setSwing(feel: SwingFeel) = controller.setSwing(feel)
     fun toggleGroupTempo() = controller.toggleGroupTempo()
     fun cycleBeatAccent(index: Int) = controller.cycleBeatAccent(index)
@@ -209,6 +254,36 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     fun clearListenDebug() = controller.clearListenDebug()
     fun applyListenBpm(bpm: Int) = controller.applyListenBpm(bpm)
     fun onListenLifecyclePause() = controller.onListenLifecyclePause()
+
+    fun selectColorTheme(id: String) {
+        themeStore.select(id)
+        refreshTheme()
+    }
+
+    fun customizeCurrentTheme() {
+        themeStore.saveCustom(_theme.value)
+        refreshTheme()
+    }
+
+    fun updateThemeSlot(key: String, hex: String) {
+        themeStore.updateSlot(key, hex)
+        refreshTheme()
+    }
+
+    fun saveNamedTheme(name: String) {
+        themeStore.saveNamed(name, _theme.value)
+        refreshTheme()
+    }
+
+    fun deleteSavedTheme(id: String) {
+        themeStore.deleteSaved(id)
+        refreshTheme()
+    }
+
+    private fun refreshTheme() {
+        _theme.value = themeStore.load()
+        _savedThemes.value = themeStore.saved()
+    }
 
     private fun requestAudioFocus(): Boolean {
         // Idempotent: start() and canStart() both call this; do not abandon/re-request.
@@ -263,6 +338,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         mainHandler.removeCallbacksAndMessages(null)
         unregisterBecomingNoisy()
         controller.dispose()
+        garmin.dispose()
         abandonAudioFocus()
         PlaybackBridge.playing = false
         PlaybackService.sync(getApplication())

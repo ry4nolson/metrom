@@ -48,7 +48,8 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         setContent {
-            MetromTheme {
+            val colorTheme by viewModel.theme.collectAsStateWithLifecycle()
+            MetromTheme(theme = colorTheme) {
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 // Ask on first play so cold launch isn't a permission wall.
                 LaunchedEffect(state.isPlaying) {

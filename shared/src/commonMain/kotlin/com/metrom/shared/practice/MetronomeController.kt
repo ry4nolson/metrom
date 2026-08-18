@@ -61,7 +61,10 @@ data class MetronomeUiState(
     val statusLine: String = "READY",
     val songs: List<SongPreset> = emptyList(),
     val activeSongId: String? = null,
-)
+) {
+    val accentsCustomized: Boolean
+        get() = !BeatAccent.isDefault(beatAccents, timeSignature.beats, timeSignature.noteValue)
+}
 
 /**
  * Shared metronome controller — UI platforms bind to [state] / [detectState].
@@ -353,7 +356,7 @@ class MetronomeController(
         val s = _state.value
         val accents = BeatAccent.defaultPattern(s.timeSignature.beats, s.timeSignature.noteValue)
         engine.setBeatAccents(accents)
-        _state.update { it.copy(beatAccents = accents, tapHint = "ACCENTS RESET") }
+        _state.update { it.copy(beatAccents = accents, tapHint = "BEAT 1 STRONG · TAP BEATS TO CHANGE") }
         prefs.putString("beatAccents", BeatAccent.encode(accents))
     }
 

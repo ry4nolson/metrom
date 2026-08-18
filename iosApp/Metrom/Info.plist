@@ -24,6 +24,23 @@
 	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>gcm-ciq</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.metrom.app.ciq</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>metrom-ciq</string>
+			</array>
+			<key>CFBundleTypeRole</key>
+			<string>None</string>
+		</dict>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Metrom listens to ambient rhythm to suggest tempo candidates.</string>
 	<key>UIBackgroundModes</key>

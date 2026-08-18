@@ -48,6 +48,12 @@ GoogleService-Info.plist
 *.hprof
 *.log
 
+# Connect IQ signing key (per-developer)
+garmin/developer_key
+garmin/*.prg
+garmin/*.prg.debug.xml
+garmin/*.iq
+
 # Local scratch / archives
 .tmp-chug/
 *.zip

@@ -1,0 +1,11 @@
+# Metrom Connect IQ watch app.
+#
+# Uses the SDK Manager "Current SDK" (9.2.0+). Signing key is PKCS#8 DER
+# at garmin/developer_key (gitignored).
+#
+#   SDK="$(cat "$HOME/Library/Application Support/Garmin/ConnectIQ/current-sdk.cfg")"
+#   "$SDK/bin/monkeyc" -o bin/Metrom.prg -f monkey.jungle -y developer_key -d fenix7
+#   "$SDK/bin/connectiq"
+#   # wait until the simulator window is up, then:
+#   "$SDK/bin/monkeydo" bin/Metrom.prg fenix7
+project.manifest = manifest.xml

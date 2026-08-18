@@ -111,5 +111,11 @@ project.build_configurations.each do |config|
 end
 
 project.save
+
+scheme = Xcodeproj::XCScheme.new
+scheme.add_build_target(target)
+scheme.set_launch_target(target)
+scheme.save_as(PROJECT_PATH, 'Metrom', true)
+
 puts "Wrote #{PROJECT_PATH}"
 puts "Swift: #{Dir[File.join(SOURCES, '*.swift')].size}, tones + AppIcon assets"

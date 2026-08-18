@@ -13,7 +13,8 @@ struct MetromApp: App {
         WindowGroup {
             MetronomeView()
                 .environmentObject(bridge)
-                .preferredColorScheme(.dark)
+                .environment(\.metromPalette, bridge.palette)
+                .preferredColorScheme(bridge.colorTheme.isLight() ? .light : .dark)
         }
     }
 }

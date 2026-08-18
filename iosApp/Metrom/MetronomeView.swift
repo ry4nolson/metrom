@@ -3,10 +3,20 @@ import SwiftUI
 struct MetronomeView: View {
     @EnvironmentObject var bridge: MetronomeBridge
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.metromPalette) private var palette
 
     @State private var practiceExpanded = false
     @State private var songsExpanded = false
     @State private var bpmScale: CGFloat = 1
+    @State private var bpmDragAccum: CGFloat = 0
+    @State private var bpmDragLastY: CGFloat = 0
+    @State private var showSaveDialog = false
+    @State private var showSettings = false
+    @State private var openMeters = false
+    @State private var saveName = ""
+    @State private var renamingSong: MetronomeBridge.SongRow?
+    @State private var renameText = ""
 
     private var isWide: Bool {
         horizontalSizeClass == .regular
@@ -19,7 +29,7 @@ struct MetronomeView: View {
 
             ZStack {
                 LinearGradient(
-                    colors: [MetromTheme.backgroundTop, MetromTheme.ink, MetromTheme.backgroundBottom],
+                    colors: [palette.backgroundTop, palette.ink, palette.backgroundBottom],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -50,6 +60,41 @@ struct MetronomeView: View {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 bpmScale = 1
             }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .background || phase == .inactive {
+                bridge.onAppBackground()
+            }
+        }
+        .alert("Save song", isPresented: $showSaveDialog) {
+            TextField("Name", text: $saveName)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                bridge.saveSong(name: saveName)
+            }
+        } message: {
+            Text("Bookmark tempo, meter, swing, and practice settings.")
+        }
+        .alert(
+            "Rename song",
+            isPresented: Binding(
+                get: { renamingSong != nil },
+                set: { if !$0 { renamingSong = nil } }
+            )
+        ) {
+            TextField("Name", text: $renameText)
+            Button("Cancel", role: .cancel) { renamingSong = nil }
+            Button("Save") {
+                if let song = renamingSong {
+                    bridge.renameSong(id: song.id, name: renameText)
+                }
+                renamingSong = nil
+            }
+        }
+        .sheet(isPresented: $showSettings, onDismiss: { openMeters = false }) {
+            SettingsView(openMeters: openMeters)
+                .environmentObject(bridge)
+                .environment(\.metromPalette, bridge.palette)
         }
     }
 
@@ -92,17 +137,28 @@ struct MetronomeView: View {
                         .padding(.top, gap)
                     Text("tap beats · strong / normal / mute")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(MetromTheme.ash)
+                        .foregroundStyle(palette.ash)
                         .padding(.top, isWide ? 10 : 6)
                     tempoHero(landscape: false)
                         .padding(.top, isWide ? 28 : 16)
+                    phaseBanner
+                        .padding(.top, isWide ? 8 : 4)
                     Text(secondaryLabel)
                         .font(.system(size: isWide ? 14 : 12, weight: .semibold))
-                        .foregroundStyle(MetromTheme.phaseColor(bridge.sessionPhase))
+                        .foregroundStyle(palette.phaseColor(bridge.sessionPhase))
                         .frame(height: 18)
-                        .padding(.top, isWide ? 8 : 4)
+                    practiceStrip
+                        .padding(.top, gap)
                     listenStrip
                         .padding(.top, gap)
+                    if let debug = bridge.listenDebug {
+                        ListenDebugPanel(
+                            debug: debug,
+                            onApplyBpm: { bridge.applyListenBpm(Int32($0)) },
+                            onClear: bridge.clearListenDebug
+                        )
+                        .padding(.top, 10)
+                    }
                     bpmPresets
                         .padding(.top, gap)
                     controls(landscape: false)
@@ -138,10 +194,12 @@ struct MetronomeView: View {
                     Spacer(minLength: 0)
                     VStack(spacing: 4) {
                         tempoHero(landscape: true)
+                        phaseBanner
                         Text(secondaryLabel)
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(MetromTheme.phaseColor(bridge.sessionPhase))
+                            .foregroundStyle(palette.phaseColor(bridge.sessionPhase))
                             .frame(height: 18)
+                        practiceStrip
                     }
                     Spacer(minLength: 0)
                 }
@@ -150,6 +208,13 @@ struct MetronomeView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: gap) {
                         listenStrip
+                        if let debug = bridge.listenDebug {
+                            ListenDebugPanel(
+                                debug: debug,
+                                onApplyBpm: { bridge.applyListenBpm(Int32($0)) },
+                                onClear: bridge.clearListenDebug
+                            )
+                        }
                         bpmPresets
                         controls(landscape: true)
                         expandable("PRACTICE", summary: practiceSummary, expanded: $practiceExpanded) {
@@ -178,23 +243,24 @@ struct MetronomeView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("METROM")
                     .font(.system(size: titleSize(landscape: landscape), weight: .heavy, design: .rounded))
-                    .foregroundStyle(MetromTheme.bone)
+                    .foregroundStyle(palette.bone)
                 Text(bridge.statusLine)
                     .font(.system(size: isWide && !landscape ? 13 : 12, weight: .semibold))
-                    .foregroundStyle(MetromTheme.phaseColor(bridge.sessionPhase))
+                    .foregroundStyle(palette.phaseColor(bridge.sessionPhase))
             }
             Spacer()
-            iconButton("bookmark.fill", tint: MetromTheme.copper, action: bridge.saveSong)
+            iconButton("bookmark.fill", tint: palette.copper) {
+                saveName = bridge.suggestedSongName()
+                showSaveDialog = true
+            }
             iconButton(
                 bridge.muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                tint: bridge.muted ? MetromTheme.ash : MetromTheme.bone,
+                tint: bridge.muted ? palette.ash : palette.bone,
                 action: bridge.toggleMute
             )
-            iconButton(
-                "iphone.radiowaves.left.and.right",
-                tint: bridge.hapticsOn ? MetromTheme.ember : MetromTheme.ash,
-                action: bridge.toggleHaptics
-            )
+            iconButton("gearshape.fill", tint: palette.bone) {
+                showSettings = true
+            }
         }
     }
 
@@ -212,12 +278,12 @@ struct MetronomeView: View {
                             .frame(height: beatHeight(level, landscape: landscape))
                             .overlay {
                                 if level == .mute {
-                                    Capsule().stroke(MetromTheme.ash.opacity(0.45), lineWidth: 1)
+                                    Capsule().stroke(palette.ash.opacity(0.45), lineWidth: 1)
                                 }
                             }
                         Text("\(idx + 1)")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(active ? MetromTheme.emberSoft : MetromTheme.ash)
+                            .foregroundStyle(active ? palette.emberSoft : palette.ash)
                     }
                     .frame(maxWidth: .infinity)
                     .contentShape(Rectangle())
@@ -240,21 +306,34 @@ struct MetronomeView: View {
             VStack(spacing: 4) {
                 Text("\(bridge.bpm)")
                     .font(.system(size: size, weight: .bold, design: .rounded))
-                    .foregroundStyle(bridge.sessionPhase == "SILENT" ? MetromTheme.ash : MetromTheme.bone)
+                    .foregroundStyle(bridge.sessionPhase == "SILENT" ? palette.ash : palette.bone)
                     .scaleEffect(bpmScale)
                     .frame(height: size + 8)
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
                     .gesture(
-                        DragGesture()
+                        DragGesture(minimumDistance: 4)
                             .onChanged { value in
-                                let steps = Int((-value.translation.height) / 14)
-                                _ = steps
+                                let dy = value.translation.height - bpmDragLastY
+                                bpmDragLastY = value.translation.height
+                                bpmDragAccum -= dy
+                                while bpmDragAccum >= 14 {
+                                    bridge.nudgeBpm(1)
+                                    bpmDragAccum -= 14
+                                }
+                                while bpmDragAccum <= -14 {
+                                    bridge.nudgeBpm(-1)
+                                    bpmDragAccum += 14
+                                }
+                            }
+                            .onEnded { _ in
+                                bpmDragAccum = 0
+                                bpmDragLastY = 0
                             }
                     )
-                Text(bridge.tapHint ?? "BPM · nudge to change")
+                Text(bridge.tapHint ?? "BPM · drag to change")
                     .font(.system(size: isWide && !landscape ? 13 : 12, weight: .medium))
-                    .foregroundStyle(bridge.tapHint == nil ? MetromTheme.ash : MetromTheme.emberSoft)
+                    .foregroundStyle(bridge.tapHint == nil ? palette.ash : palette.emberSoft)
                     .frame(height: 18)
             }
             .frame(maxWidth: .infinity)
@@ -262,39 +341,196 @@ struct MetronomeView: View {
         }
     }
 
-    private var listenStrip: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                Image(systemName: "ear")
-                    .foregroundStyle(bridge.isPlaying ? MetromTheme.ash : MetromTheme.copper)
-                ChoiceChip(
-                    label: bridge.isPlaying ? "Stop to listen" : "Listen",
-                    selected: false,
-                    action: { if !bridge.isPlaying { bridge.startListen() } }
-                )
-                .opacity(bridge.isPlaying ? 0.35 : 1)
-                .disabled(bridge.isPlaying)
-                if !bridge.listenStatus.isEmpty {
-                    Text(bridge.listenStatus)
+    @ViewBuilder
+    private var phaseBanner: some View {
+        let copy = phaseBannerCopy
+        VStack(spacing: 2) {
+            if let title = copy.title {
+                Text(title)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(palette.phaseColor(bridge.sessionPhase))
+                    .lineLimit(1)
+                if let detail = copy.detail {
+                    Text(detail)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(MetromTheme.ash)
-                }
-                Spacer(minLength: 0)
-                if !bridge.listenOptions.isEmpty {
-                    Button("Dismiss") { bridge.resetListen() }
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(MetromTheme.ash)
+                        .foregroundStyle(palette.ash)
+                        .lineLimit(1)
                 }
             }
-            if !bridge.listenOptions.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 52)
+    }
+
+    private var phaseBannerCopy: (title: String?, detail: String?) {
+        guard bridge.isPlaying else { return (nil, nil) }
+        switch bridge.sessionPhase {
+        case "COUNT_IN":
+            let remaining = max(1, bridge.countInBars - bridge.sessionBar)
+            return (
+                "\(remaining)",
+                remaining == 1 ? "LAST BAR · COUNT IN" : "BARS LEFT · COUNT IN"
+            )
+        case "SILENT":
+            return ("YOUR MOVE", "keep the pulse")
+        case "TRAINER_DONE":
+            return ("LOCKED", "target \(bridge.trainerTarget)")
+        case "PLAYING":
+            if let hint = bridge.tapHint, hint.hasPrefix("TRAIN →") {
+                return (hint, "tempo step")
+            }
+            return (nil, nil)
+        default:
+            return (nil, nil)
+        }
+    }
+
+    @ViewBuilder
+    private var practiceStrip: some View {
+        let showMute = bridge.muteSilentBars > 0
+        let showTrainer = bridge.trainerEnabled
+        if showMute || showTrainer {
+            VStack(alignment: .leading, spacing: 8) {
+                if showMute {
+                    let play = bridge.mutePlayBars
+                    let silent = bridge.muteSilentBars
+                    let cycle = play + silent
+                    let practiceBar: Int = {
+                        if bridge.isPlaying && bridge.sessionBar >= bridge.countInBars {
+                            return (bridge.sessionBar - bridge.countInBars) % cycle
+                        }
+                        return -1
+                    }()
+                    HStack(spacing: 6) {
+                        ForEach(0..<cycle, id: \.self) { index in
+                            let isSilentSlot = index >= play
+                            let isCurrent = index == practiceBar
+                            Capsule()
+                                .fill(
+                                    isCurrent && isSilentSlot ? palette.mist
+                                        : isCurrent ? palette.ember
+                                        : isSilentSlot ? palette.inkLine.opacity(0.35)
+                                        : palette.ember.opacity(0.35)
+                                )
+                                .frame(height: 8)
+                        }
+                    }
+                    Text(
+                        bridge.sessionPhase == "SILENT"
+                            ? "MUTE CYCLE · YOUR BARS"
+                            : "MUTE CYCLE · \(bridge.muteLabel)"
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(bridge.sessionPhase == "SILENT" ? palette.mist : palette.ash)
+                }
+
+                if showTrainer {
+                    let start = min(bridge.trainerStartBpm, bridge.trainerTarget)
+                    let span = max(1, bridge.trainerTarget - start)
+                    let progress = min(1, max(0, Float(bridge.bpm - start) / Float(span)))
+                    let practice = max(0, bridge.sessionBar - bridge.countInBars)
+                    let every = max(1, bridge.trainerEveryBars)
+                    let until = (bridge.isPlaying && bridge.sessionBar >= bridge.countInBars)
+                        ? every - (practice % every)
+                        : every
+
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(palette.inkLine)
+                            Capsule()
+                                .fill(palette.ember)
+                                .frame(width: geo.size.width * CGFloat(progress))
+                        }
+                    }
+                    .frame(height: 6)
+                    Text("TRAIN \(start)→\(bridge.trainerTarget) · +\(bridge.trainerStep) in \(until)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(palette.emberSoft)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 4)
+        }
+    }
+
+    private var listenStrip: some View {
+        VStack(spacing: 8) {
+            switch bridge.listenPhase {
+            case .idle:
+                HStack(spacing: 10) {
+                    Image(systemName: "ear")
+                        .foregroundStyle(bridge.isPlaying ? palette.ash : palette.copper)
+                    ChoiceChip(
+                        label: bridge.isPlaying ? "Stop to listen" : "Listen",
+                        selected: false,
+                        action: { if !bridge.isPlaying { bridge.startListen() } }
+                    )
+                    .opacity(bridge.isPlaying ? 0.35 : 1)
+                    .disabled(bridge.isPlaying)
+                    if bridge.isPlaying {
+                        Text("stop to listen")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(palette.ash)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+            case .listening:
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .stroke(palette.inkLine, lineWidth: 3)
+                        Circle()
+                            .trim(from: 0, to: CGFloat(bridge.listenProgress))
+                            .stroke(palette.ember, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                        Text("\(Int((bridge.listenProgress * 8).rounded()))s")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(palette.mist)
+                    }
+                    .frame(width: 36, height: 36)
+                    Text("listening…")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(palette.emberSoft)
+                    ChoiceChip(label: "Cancel", selected: false, action: bridge.cancelListen)
+                    Spacer(minLength: 0)
+                }
+
+            case .analyzing:
+                Text("finding the beat…")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(palette.copper)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+            case .success:
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("pick a tempo")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(palette.bone)
+                        Spacer()
+                        Button("Dismiss") { bridge.resetListen() }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(palette.ash)
+                    }
+                    FlowLayout {
                         ForEach(bridge.listenOptions, id: \.self) { opt in
                             ChoiceChip(label: "\(opt)", selected: false) {
                                 bridge.applyListenBpm(Int32(opt))
                             }
                         }
                     }
+                }
+
+            case .failed:
+                HStack(spacing: 10) {
+                    if !bridge.listenStatus.isEmpty {
+                        Text(bridge.listenStatus)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(palette.ash)
+                    }
+                    ChoiceChip(label: "Dismiss", selected: false, action: bridge.resetListen)
+                    Spacer(minLength: 0)
                 }
             }
         }
@@ -310,7 +546,13 @@ struct MetronomeView: View {
     private func controls(landscape: Bool) -> some View {
         VStack(alignment: .leading, spacing: landscape ? 12 : (isWide ? 18 : 14)) {
             labeledChips("METER", bridge.meterOptions, bridge.meterLabel, bridge.selectMeter) {
-                ChoiceChip(label: "Accents", selected: false, action: bridge.resetBeatAccents)
+                ChoiceChip(label: "Custom", selected: false) {
+                    openMeters = true
+                    showSettings = true
+                }
+                if bridge.accentsCustomized {
+                    ChoiceChip(label: "Reset accents", selected: false, action: bridge.resetBeatAccents)
+                }
             }
             labeledChips("GRID", bridge.subdivisionOptions, bridge.subdivisionLabel, bridge.selectSubdivision)
             if bridge.subdivisionLabel == "×2" || bridge.subdivisionLabel == "×4" {
@@ -326,67 +568,122 @@ struct MetronomeView: View {
                     if wantDotted != bridge.groupTempo { bridge.toggleGroupTempo() }
                 }
             }
-            labeledChips("SOUND", bridge.toneOptions, bridge.toneLabel, bridge.selectTone)
-            labeledChips("ONE", bridge.noteOptions, bridge.accentNoteLabel, bridge.selectAccentNote)
-            labeledChips("OTHERS", bridge.noteOptions, bridge.restNoteLabel, bridge.selectRestNote)
         }
     }
 
     private var practiceBody: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("COUNT-IN")
+            Text("COUNT IN")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(MetromTheme.ash)
-            HStack(spacing: 8) {
+                .foregroundStyle(palette.ash)
+            FlowLayout {
                 ForEach([0, 1, 2, 4], id: \.self) { bars in
                     ChoiceChip(
-                        label: bars == 0 ? "Off" : "\(bars)",
+                        label: bars == 0 ? "Off" : "\(bars) bar",
                         selected: bridge.countInBars == bars
                     ) { bridge.setCountIn(Int32(bars)) }
                 }
             }
+
             Text("MUTE BARS")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(MetromTheme.ash)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(bridge.muteOptions, id: \.self) { opt in
-                        ChoiceChip(label: opt, selected: opt == bridge.muteLabel) {
-                            bridge.selectMutePattern(opt)
-                        }
+                .foregroundStyle(palette.ash)
+            FlowLayout {
+                ForEach(bridge.muteOptions, id: \.self) { opt in
+                    ChoiceChip(label: opt, selected: opt == bridge.muteLabel) {
+                        bridge.selectMutePattern(opt)
                     }
                 }
             }
-            Toggle(isOn: Binding(
-                get: { bridge.trainerEnabled },
-                set: { _ in bridge.toggleTrainer() }
-            )) {
-                Text("Tempo trainer → \(bridge.trainerTarget)")
-                    .foregroundStyle(MetromTheme.mist)
-            }
-            .tint(MetromTheme.ember)
-            if bridge.trainerEnabled {
-                ChoiceChip(label: "Cycle target", selected: false, action: bridge.cycleTrainerTarget)
+
+            Text("TRAINER")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(palette.ash)
+            FlowLayout {
+                ChoiceChip(
+                    label: bridge.trainerEnabled ? "On" : "Off",
+                    selected: bridge.trainerEnabled,
+                    action: bridge.toggleTrainer
+                )
+                if bridge.trainerEnabled {
+                    ChoiceChip(
+                        label: "→\(bridge.trainerTarget)",
+                        selected: false,
+                        action: bridge.cycleTrainerTarget
+                    )
+                    ChoiceChip(
+                        label: "±\(bridge.trainerStep)",
+                        selected: false,
+                        action: bridge.cycleTrainerStep
+                    )
+                    ChoiceChip(
+                        label: "each \(bridge.trainerEveryBars)",
+                        selected: false,
+                        action: bridge.cycleTrainerEveryBars
+                    )
+                    ChoiceChip(
+                        label: bridge.trainerAutoStop ? "stop" : "hold",
+                        selected: bridge.trainerAutoStop,
+                        action: bridge.toggleTrainerAutoStop
+                    )
+                }
             }
         }
     }
 
     private var songsBody: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if bridge.songs.isEmpty {
-                Text("No saved songs")
-                    .font(.system(size: 13))
-                    .foregroundStyle(MetromTheme.ash)
+        VStack(alignment: .leading, spacing: 10) {
+            if bridge.activeSongId != nil {
+                ChoiceChip(label: "Update active", selected: false, action: bridge.updateActiveSong)
             }
-            ForEach(bridge.songs) { song in
-                HStack {
-                    Button(song.name) { bridge.loadSong(id: song.id) }
-                        .foregroundStyle(MetromTheme.bone)
-                    Spacer()
-                    Button { bridge.deleteSong(id: song.id) } label: {
-                        Image(systemName: "trash")
-                            .foregroundStyle(MetromTheme.ash)
+            if bridge.songs.isEmpty {
+                Text("Bookmark tempo, meter, swing, and practice settings. Long-press to rename.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(palette.ash)
+            } else {
+                ForEach(bridge.songs) { song in
+                    let selected = bridge.activeSongId == song.id
+                    HStack(alignment: .center, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(song.name)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(palette.bone)
+                                .lineLimit(1)
+                            Text(song.detail)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(palette.ash)
+                                .lineLimit(2)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture { bridge.loadSong(id: song.id) }
+                        .onLongPressGesture {
+                            renamingSong = song
+                            renameText = song.name
+                        }
+                        Button {
+                            bridge.deleteSong(id: song.id)
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(palette.ash)
+                                .frame(width: 32, height: 32)
+                        }
+                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(selected ? palette.ember.opacity(0.14) : Color.clear)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(
+                                selected ? palette.ember.opacity(0.55) : palette.inkLine,
+                                lineWidth: 1
+                            )
+                    )
                 }
             }
         }
@@ -399,7 +696,7 @@ struct MetronomeView: View {
                 HStack(alignment: .center, spacing: isWide ? 24 : 16) {
                     HStack(spacing: 12) {
                         Image(systemName: bridge.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .foregroundStyle(MetromTheme.ash)
+                            .foregroundStyle(palette.ash)
                         Slider(
                             value: Binding(
                                 get: { Double(bridge.volume) },
@@ -407,7 +704,7 @@ struct MetronomeView: View {
                             ),
                             in: 0...1
                         )
-                        .tint(MetromTheme.ember)
+                        .tint(palette.ember)
                     }
                     .frame(maxWidth: .infinity)
 
@@ -416,23 +713,7 @@ struct MetronomeView: View {
                             .frame(maxWidth: .infinity)
                         TransportChip(label: "−5") { bridge.nudgeBpm(-5) }
                             .frame(width: 56)
-                        Button(action: bridge.togglePlay) {
-                            Image(systemName: bridge.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundStyle(MetromTheme.ink)
-                                .frame(width: playSize, height: playSize)
-                                .background(
-                                    Circle().fill(
-                                        RadialGradient(
-                                            colors: [MetromTheme.emberSoft, MetromTheme.ember, Color(red: 0.72, green: 0.20, blue: 0.07)],
-                                            center: .center,
-                                            startRadius: 4,
-                                            endRadius: playSize * 0.57
-                                        )
-                                    )
-                                )
-                        }
-                        .buttonStyle(.plain)
+                        playButton(size: playSize, iconSize: 22)
                         TransportChip(label: "+5") { bridge.nudgeBpm(5) }
                             .frame(width: 56)
                     }
@@ -441,19 +722,12 @@ struct MetronomeView: View {
                 .padding(.horizontal, padding)
                 .padding(.top, 10)
                 .padding(.bottom, 12)
-                .background(
-                    LinearGradient(
-                        colors: [.clear, MetromTheme.ink.opacity(0.92), MetromTheme.ink],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .ignoresSafeArea(edges: .bottom)
-                )
+                .background(dockBackground)
             } else {
                 VStack(spacing: isWide ? 14 : 12) {
                     HStack(spacing: 12) {
                         Image(systemName: bridge.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .foregroundStyle(MetromTheme.ash)
+                            .foregroundStyle(palette.ash)
                         Slider(
                             value: Binding(
                                 get: { Double(bridge.volume) },
@@ -461,7 +735,7 @@ struct MetronomeView: View {
                             ),
                             in: 0...1
                         )
-                        .tint(MetromTheme.ember)
+                        .tint(palette.ember)
                     }
                     .padding(.horizontal, padding)
 
@@ -470,23 +744,7 @@ struct MetronomeView: View {
                             .frame(maxWidth: .infinity)
                         TransportChip(label: "−5") { bridge.nudgeBpm(-5) }
                             .frame(width: isWide ? 72 : 64)
-                        Button(action: bridge.togglePlay) {
-                            Image(systemName: bridge.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: isWide ? 32 : 28, weight: .bold))
-                                .foregroundStyle(MetromTheme.ink)
-                                .frame(width: playSize, height: playSize)
-                                .background(
-                                    Circle().fill(
-                                        RadialGradient(
-                                            colors: [MetromTheme.emberSoft, MetromTheme.ember, Color(red: 0.72, green: 0.20, blue: 0.07)],
-                                            center: .center,
-                                            startRadius: 4,
-                                            endRadius: playSize * 0.57
-                                        )
-                                    )
-                                )
-                        }
-                        .buttonStyle(.plain)
+                        playButton(size: playSize, iconSize: isWide ? 32 : 28)
                         TransportChip(label: "+5") { bridge.nudgeBpm(5) }
                             .frame(width: isWide ? 72 : 64)
                     }
@@ -494,21 +752,44 @@ struct MetronomeView: View {
                     .padding(.bottom, 20)
                 }
                 .padding(.top, isWide ? 14 : 10)
-                .background(
-                    LinearGradient(
-                        colors: [.clear, MetromTheme.ink.opacity(0.92), MetromTheme.ink],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .ignoresSafeArea(edges: .bottom)
-                )
+                .background(dockBackground)
             }
         }
     }
 
+    private var dockBackground: some View {
+        LinearGradient(
+            colors: [.clear, palette.ink.opacity(0.92), palette.ink],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    private func playButton(size: CGFloat, iconSize: CGFloat) -> some View {
+        Button(action: bridge.togglePlay) {
+            Image(systemName: bridge.isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: iconSize, weight: .bold))
+                .foregroundStyle(palette.ink)
+                .frame(width: size, height: size)
+                .background(
+                    Circle().fill(
+                        RadialGradient(
+                            colors: [palette.emberSoft, palette.ember, palette.emberDeep],
+                            center: .center,
+                            startRadius: 4,
+                            endRadius: size * 0.57
+                        )
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var secondaryLabel: String {
         if bridge.trainerEnabled && bridge.isPlaying {
-            return "TRAIN → \(bridge.trainerTarget)"
+            let sign = bridge.trainerTarget < bridge.bpm ? "−" : "+"
+            return "TRAIN \(bridge.trainerStartBpm)→\(bridge.trainerTarget) · \(sign)\(bridge.trainerStep)/\(bridge.trainerEveryBars)"
         }
         var parts = [MetromTheme.tempoMarking(bridge.bpm)]
         if bridge.groupTempo { parts.append("dotted") }
@@ -518,10 +799,10 @@ struct MetronomeView: View {
 
     private var practiceSummary: String {
         var bits: [String] = []
-        if bridge.countInBars > 0 { bits.append("count-in \(bridge.countInBars)") }
-        if bridge.muteLabel != "Off" { bits.append("mute \(bridge.muteLabel)") }
-        if bridge.trainerEnabled { bits.append("train → \(bridge.trainerTarget)") }
-        return bits.isEmpty ? "count-in · mute · trainer" : bits.joined(separator: " · ")
+        bits.append(bridge.countInBars == 0 ? "no count-in" : "count-in \(bridge.countInBars)")
+        bits.append(bridge.muteSilentBars == 0 ? "mute off" : "mute \(bridge.muteLabel)")
+        if bridge.trainerEnabled { bits.append("train →\(bridge.trainerTarget)") }
+        return bits.joined(separator: " · ")
     }
 
     private func labeledChips(
@@ -534,14 +815,12 @@ struct MetronomeView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(MetromTheme.ash)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(options, id: \.self) { opt in
-                        ChoiceChip(label: opt, selected: opt == selected) { select(opt) }
-                    }
-                    trailing()
+                .foregroundStyle(palette.ash)
+            FlowLayout {
+                ForEach(options, id: \.self) { opt in
+                    ChoiceChip(label: opt, selected: opt == selected) { select(opt) }
                 }
+                trailing()
             }
         }
     }
@@ -551,11 +830,9 @@ struct MetronomeView: View {
         select: @escaping (String) -> Void,
         isSelected: @escaping (String) -> Bool
     ) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(presets, id: \.self) { p in
-                    ChoiceChip(label: p, selected: isSelected(p)) { select(p) }
-                }
+        FlowLayout {
+            ForEach(presets, id: \.self) { p in
+                ChoiceChip(label: p, selected: isSelected(p)) { select(p) }
             }
         }
     }
@@ -573,15 +850,15 @@ struct MetronomeView: View {
                 HStack {
                     Text(title)
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(MetromTheme.ash)
+                        .foregroundStyle(palette.ash)
                     Spacer()
                     Text(summary)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(MetromTheme.mist)
+                        .foregroundStyle(palette.mist)
                         .lineLimit(1)
                     Image(systemName: expanded.wrappedValue ? "chevron.up" : "chevron.down")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(MetromTheme.ash)
+                        .foregroundStyle(palette.ash)
                 }
             }
             .buttonStyle(.plain)
@@ -591,7 +868,7 @@ struct MetronomeView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(MetromTheme.inkElevated.opacity(0.7))
+                            .fill(palette.inkElevated.opacity(0.7))
                     )
             }
         }
@@ -618,12 +895,12 @@ struct MetronomeView: View {
 
     private func beatFill(level: MetronomeBridge.BeatAccentLevel, active: Bool) -> Color {
         switch (level, active) {
-        case (.strong, true): return MetromTheme.pulse
-        case (.mute, true): return MetromTheme.ash.opacity(0.45)
-        case (_, true): return MetromTheme.ember
-        case (.strong, false): return MetromTheme.inkLine.opacity(0.95)
-        case (.mute, false): return MetromTheme.inkLine.opacity(0.22)
-        case (.normal, false): return MetromTheme.inkLine.opacity(0.5)
+        case (.strong, true): return palette.pulse
+        case (.mute, true): return palette.ash.opacity(0.45)
+        case (_, true): return palette.ember
+        case (.strong, false): return palette.inkLine.opacity(0.95)
+        case (.mute, false): return palette.inkLine.opacity(0.22)
+        case (.normal, false): return palette.inkLine.opacity(0.5)
         }
     }
 }
@@ -637,6 +914,7 @@ private struct PendulumAtmosphere: View {
     let groupTempo: Bool
     let phase: String
 
+    @Environment(\.metromPalette) private var palette
     @State private var lastFlash: Int64 = 0
     @State private var apexSign: Double = 1
     @State private var epochMs: Double = 0
@@ -660,10 +938,10 @@ private struct PendulumAtmosphere: View {
                 path.move(to: pivot)
                 path.addLine(to: bob)
                 let glow: Color = {
-                    if phase == "SILENT" { return MetromTheme.ash }
-                    return isAccent ? MetromTheme.pulse : MetromTheme.ember
+                    if phase == "SILENT" { return palette.ash }
+                    return isAccent ? palette.pulse : palette.ember
                 }()
-                context.stroke(path, with: .color(MetromTheme.mist.opacity(0.35)), lineWidth: 2)
+                context.stroke(path, with: .color(palette.mist.opacity(0.35)), lineWidth: 2)
                 context.fill(
                     Path(ellipseIn: CGRect(x: bob.x - 10, y: bob.y - 10, width: 20, height: 20)),
                     with: .color(glow.opacity(isPlaying ? 0.85 : 0.2))

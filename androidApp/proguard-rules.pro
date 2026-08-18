@@ -22,6 +22,9 @@
 # SongDto serializers: covered by kotlinx-serialization consumer ProGuard rules.
 # No keeps for SongPreset / SongStore / MutePattern — nothing reflects on them.
 
+-keep class com.garmin.android.connectiq.** { *; }
+-dontwarn com.garmin.android.connectiq.**
+
 -dontwarn androidx.compose.**
 -keepclassmembers class * extends androidx.lifecycle.ViewModel {
     <init>(...);

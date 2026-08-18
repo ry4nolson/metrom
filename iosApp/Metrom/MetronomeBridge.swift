@@ -18,16 +18,29 @@ final class MetronomeBridge: ObservableObject {
     @Published private(set) var hapticsOn: Bool = true
     @Published private(set) var activeBeat: Int = -1
     @Published private(set) var beatAccents: [BeatAccentLevel] = [.strong, .normal, .normal, .normal]
+    @Published private(set) var accentsCustomized: Bool = false
     @Published private(set) var countInBars: Int = 1
     @Published private(set) var muteLabel: String = "Off"
     @Published private(set) var trainerEnabled: Bool = false
     @Published private(set) var trainerTarget: Int = 120
+    @Published private(set) var trainerStep: Int = 2
+    @Published private(set) var trainerEveryBars: Int = 4
+    @Published private(set) var trainerAutoStop: Bool = true
+    @Published private(set) var trainerStartBpm: Int = 80
+    @Published private(set) var sessionBar: Int = 0
+    @Published private(set) var mutePlayBars: Int = 1
+    @Published private(set) var muteSilentBars: Int = 0
     @Published private(set) var listenOptions: [Int] = []
     @Published private(set) var listenStatus: String = ""
+    @Published private(set) var listenProgress: Float = 0
+    @Published private(set) var listenPhase: ListenPhase = .idle
+    @Published private(set) var listenDebug: ListenDebugSnapshot? = nil
     @Published private(set) var songs: [SongRow] = []
+    @Published private(set) var activeSongId: String? = nil
     @Published private(set) var groupTempo: Bool = false
     @Published private(set) var accentNoteLabel: String = "A4"
     @Published private(set) var restNoteLabel: String = "Off"
+    @Published private(set) var supportsPitchAccent: Bool = true
     @Published private(set) var sessionPhase: String = "IDLE"
     @Published private(set) var tapHint: String? = nil
     @Published private(set) var beatFlash: Int64 = 0
@@ -39,25 +52,68 @@ final class MetronomeBridge: ObservableObject {
     @Published private(set) var toneOptions: [String] = []
     @Published private(set) var noteOptions: [String] = []
     @Published private(set) var muteOptions: [String] = []
+    @Published private(set) var colorTheme: ColorTheme = ColorTheme.companion.EMBER
+    @Published private(set) var palette: MetromPalette = .ember
+    @Published private(set) var savedThemes: [ColorTheme] = []
+    @Published private(set) var customMeters: [TimeSignature] = []
 
     enum BeatAccentLevel: String {
         case strong, normal, mute
     }
 
-    struct SongRow: Identifiable {
+    enum ListenPhase: Equatable {
+        case idle
+        case listening
+        case analyzing
+        case success
+        case failed
+    }
+
+    struct SongRow: Identifiable, Equatable {
         let id: String
         let name: String
+        let detail: String
+    }
+
+    /// Swift-side copy of shared DetectDebug for Canvas drawing.
+    struct ListenDebugSnapshot: Equatable {
+        struct Candidate: Identifiable, Equatable {
+            let id: String
+            let bpm: Int
+            let lag: Int
+            let rawPeak: Float
+            let score: Float
+            let isWinner: Bool
+            let promotedFrom: Int?
+        }
+
+        let waveform: [Float]
+        let onset: [Float]
+        let acf: [Float]
+        let beatTimesSec: [Float]
+        let durationSec: Float
+        let confidence: Float
+        let accepted: Bool
+        let octaveDoubled: Bool
+        let bpm: Int?
+        let candidates: [Candidate]
+        let acfMinLag: Int
+        let acfMaxLag: Int
+        let envelopeRate: Float
     }
 
     private let controller: MetronomeController
     private let engine: MetronomeEngine
     private let sink: AVAudioPcmSink
     private let runner: IosEngineRunner
+    private let themeStore: ColorThemeStore
+    private let meterStore: CustomMeterStore
     private var pollTimer: Timer?
     private var optionsLoaded = false
     private var interruptedWhilePlaying = false
     private var interruptionObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
+    private var lastDebugStamp: String? = nil
 
     private var ui: MetronomeUiState? {
         controller.state.value as? MetronomeUiState
@@ -65,6 +121,8 @@ final class MetronomeBridge: ObservableObject {
 
     init() {
         let prefs = IosPrefsStore()
+        themeStore = ColorThemeStore(prefs: prefs)
+        meterStore = CustomMeterStore(prefs: prefs)
         let assets = IosAssetIO()
         let cache = SampleToneCache(assets: assets)
         sink = AVAudioPcmSink()
@@ -119,6 +177,8 @@ final class MetronomeBridge: ObservableObject {
 
         setupRemoteCommands()
         setupAudioSessionObservers()
+        applyLoadedTheme()
+        refreshCustomMeters()
         refreshFromState()
         startPolling()
     }
@@ -169,10 +229,76 @@ final class MetronomeBridge: ObservableObject {
     func toggleHaptics() { controller.toggleHaptics(); refreshFromState() }
     func setVolume(_ v: Float) { controller.setVolume(volume: v); refreshFromState() }
 
+    func selectColorTheme(_ id: String) {
+        themeStore.select(id: id)
+        applyLoadedTheme()
+    }
+
+    func customizeCurrentTheme() {
+        themeStore.saveCustom(theme: colorTheme)
+        applyLoadedTheme()
+    }
+
+    func updateThemeSlot(key: String, hex: String) {
+        themeStore.updateSlot(key: key, hex: hex)
+        applyLoadedTheme()
+    }
+
+    func saveNamedTheme(_ name: String) {
+        themeStore.saveNamed(name: name, theme: colorTheme)
+        applyLoadedTheme()
+    }
+
+    func deleteSavedTheme(_ id: String) {
+        themeStore.deleteSaved(id: id)
+        applyLoadedTheme()
+    }
+
+    private func applyLoadedTheme() {
+        let loaded = themeStore.load()
+        colorTheme = loaded
+        palette = MetromPalette(theme: loaded)
+        savedThemes = Self.colorThemes(themeStore.saved())
+    }
+
+    private static func colorThemes(_ list: Any) -> [ColorTheme] {
+        if let arr = list as? [ColorTheme] { return arr }
+        if let arr = list as? NSArray {
+            return arr.compactMap { $0 as? ColorTheme }
+        }
+        return []
+    }
+
     func selectMeter(_ label: String) {
-        guard let ts = TimeSignature.companion.COMMON.first(where: { $0.label == label }) else { return }
+        guard let ts = TimeSignature.companion.parse(label: label) else { return }
         controller.setTimeSignature(signature: ts)
         refreshFromState()
+    }
+
+    func addCustomMeter(beats: Int32, noteValue: Int32) {
+        if let sig = meterStore.add(beats: beats, noteValue: noteValue) {
+            refreshCustomMeters()
+            controller.setTimeSignature(signature: sig)
+            refreshFromState()
+        }
+    }
+
+    func deleteCustomMeter(_ signature: TimeSignature) {
+        meterStore.remove(signature: signature)
+        refreshCustomMeters()
+    }
+
+    private func refreshCustomMeters() {
+        customMeters = Self.timeSignatures(meterStore.all())
+        meterOptions = TimeSignature.companion.COMMON.map(\.label) + customMeters.map(\.label)
+    }
+
+    private static func timeSignatures(_ list: Any) -> [TimeSignature] {
+        if let arr = list as? [TimeSignature] { return arr }
+        if let arr = list as? NSArray {
+            return arr.compactMap { $0 as? TimeSignature }
+        }
+        return []
     }
 
     func selectSubdivision(_ label: String) {
@@ -226,7 +352,50 @@ final class MetronomeBridge: ObservableObject {
 
     func toggleTrainer() { controller.toggleTrainer(); refreshFromState() }
     func cycleTrainerTarget() { controller.cycleTrainerTarget(); refreshFromState() }
-    func saveSong() { controller.saveCurrentSong(name: nil); refreshFromState() }
+
+    func cycleTrainerStep() {
+        let next = trainerStep >= 5 ? 1 : trainerStep + 1
+        controller.setTrainerStep(step: Int32(next))
+        refreshFromState()
+    }
+
+    func cycleTrainerEveryBars() {
+        let next: Int32
+        switch trainerEveryBars {
+        case 2: next = 4
+        case 4: next = 8
+        default: next = 2
+        }
+        controller.setTrainerEveryBars(bars: next)
+        refreshFromState()
+    }
+
+    func toggleTrainerAutoStop() {
+        controller.toggleTrainerAutoStop()
+        refreshFromState()
+    }
+
+    /// Prefill for the save-song dialog (matches SongPreset.autoName).
+    func suggestedSongName() -> String {
+        "\(bpm) · \(meterLabel) · \(subdivisionLabel)"
+    }
+
+    func saveSong(name: String? = nil) {
+        controller.saveCurrentSong(name: name)
+        refreshFromState()
+    }
+
+    func updateActiveSong() {
+        controller.updateActiveSong()
+        refreshFromState()
+    }
+
+    func renameSong(id: String, name: String) {
+        if let song = ui?.songs.first(where: { $0.id == id }) {
+            controller.renameSong(song: song, name: name)
+        }
+        refreshFromState()
+    }
 
     func loadSong(id: String) {
         if let song = ui?.songs.first(where: { $0.id == id }) {
@@ -243,7 +412,38 @@ final class MetronomeBridge: ObservableObject {
     }
 
     func startListen() {
+        if isPlaying { return }
+        switch AVAudioSession.sharedInstance().recordPermission {
+        case .granted:
+            beginListenCapture()
+        case .denied:
+            listenPhase = .failed
+            listenStatus = "Mic access needed"
+            listenOptions = []
+            listenProgress = 0
+        case .undetermined:
+            AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    if granted {
+                        self.beginListenCapture()
+                    } else {
+                        self.listenPhase = .failed
+                        self.listenStatus = "Mic access needed"
+                        self.listenOptions = []
+                        self.listenProgress = 0
+                    }
+                }
+            }
+        @unknown default:
+            beginListenCapture()
+        }
+    }
+
+    private func beginListenCapture() {
         listenStatus = "Listening…"
+        listenPhase = .listening
+        listenProgress = 0
         controller.listenCaptureRunner = { [weak self] mic in
             DispatchQueue.global(qos: .userInitiated).async {
                 self?.controller.runListenCapture(mic: mic)
@@ -254,13 +454,31 @@ final class MetronomeBridge: ObservableObject {
         refreshFromState()
     }
 
+    func cancelListen() {
+        controller.cancelListen()
+        refreshFromState()
+    }
+
     func applyListenBpm(_ bpm: Int32) {
         controller.applyListenBpm(bpm: bpm)
         refreshFromState()
     }
 
     func resetListen() { controller.resetListen(); refreshFromState() }
+
+    func clearListenDebug() {
+        controller.clearListenDebug()
+        listenDebug = nil
+        lastDebugStamp = nil
+        refreshFromState()
+    }
+
     func toggleGroupTempo() { controller.toggleGroupTempo(); refreshFromState() }
+
+    func onAppBackground() {
+        controller.onListenLifecyclePause()
+        refreshFromState()
+    }
 
     func selectAccentNote(_ label: String) {
         let all = AccentNote.values()
@@ -319,14 +537,25 @@ final class MetronomeBridge: ObservableObject {
         assignIfChanged(&muteLabel, s.mutePattern.label)
         assignIfChanged(&trainerEnabled, s.trainerEnabled)
         assignIfChanged(&trainerTarget, Int(s.trainerTargetBpm))
+        assignIfChanged(&trainerStep, Int(s.trainerStep))
+        assignIfChanged(&trainerEveryBars, Int(s.trainerEveryBars))
+        assignIfChanged(&trainerAutoStop, s.trainerAutoStop)
+        assignIfChanged(&trainerStartBpm, Int(s.trainerStartBpm))
+        assignIfChanged(&sessionBar, Int(s.sessionBar))
+        assignIfChanged(&mutePlayBars, Int(s.mutePattern.playBars))
+        assignIfChanged(&muteSilentBars, Int(s.mutePattern.silentBars))
         assignIfChanged(&groupTempo, s.groupTempo)
         assignIfChanged(&accentNoteLabel, s.accentNote.label)
         assignIfChanged(&restNoteLabel, s.restNote.label)
+        assignIfChanged(&supportsPitchAccent, s.tone.supportsPitchAccent)
         assignIfChanged(&sessionPhase, s.sessionPhase.name)
         assignIfChanged(&tapHint, s.tapHint)
         assignIfChanged(&beatFlash, s.beatFlash)
         assignIfChanged(&beatAtMs, s.beatAtMs)
         assignIfChanged(&isAccentBeat, s.isAccentBeat)
+
+        let nextActiveSongId = s.activeSongId
+        if activeSongId != nextActiveSongId { activeSongId = nextActiveSongId }
 
         let nextAccents: [BeatAccentLevel] = s.beatAccents.map { accent in
             switch accent.name {
@@ -336,14 +565,19 @@ final class MetronomeBridge: ObservableObject {
             }
         }
         if nextAccents != beatAccents { beatAccents = nextAccents }
+        assignIfChanged(&accentsCustomized, s.accentsCustomized)
 
-        let nextSongs = s.songs.map { SongRow(id: $0.id, name: $0.name) }
-        if nextSongs.map(\.id) != songs.map(\.id) || nextSongs.map(\.name) != songs.map(\.name) {
-            songs = nextSongs
+        let nextSongs: [SongRow] = s.songs.map { song in
+            var detail = "\(Int(song.bpm)) · \(song.timeSignature.label) · \(song.subdivision.label)"
+            if song.swing.label != "Off" { detail += " · \(song.swing.label)" }
+            if song.groupTempo { detail += " · dotted" }
+            if Int(song.mutePattern.silentBars) > 0 { detail += " · mute \(song.mutePattern.label)" }
+            if Int(song.countInBars) > 0 { detail += " · in \(Int(song.countInBars))" }
+            return SongRow(id: song.id, name: song.name, detail: detail)
         }
+        if nextSongs != songs { songs = nextSongs }
 
         if !optionsLoaded {
-            meterOptions = TimeSignature.companion.COMMON.map(\.label)
             let subs = Subdivision.values()
             subdivisionOptions = (0..<Int(subs.size)).compactMap {
                 (subs.get(index: Int32($0)) as? Subdivision)?.label
@@ -362,22 +596,112 @@ final class MetronomeBridge: ObservableObject {
         let nextTones = s.toneOptions.map(\.label)
         if nextTones != toneOptions { toneOptions = nextTones }
 
+        refreshListenState()
+        refreshListenDebug()
+    }
+
+    private func refreshListenDebug() {
+        guard let debug = controller.detectDebug.value as? DetectDebug else {
+            if listenDebug != nil {
+                listenDebug = nil
+                lastDebugStamp = nil
+            }
+            return
+        }
+        let bpmVal = debug.bpm?.intValue
+        let stamp = [
+            String(debug.confidence),
+            String(bpmVal ?? -1),
+            String(debug.accepted),
+            String(debug.octaveDoubled),
+            String(debug.candidates.count),
+            String(debug.waveform.size),
+            String(debug.onset.size),
+        ].joined(separator: "|")
+        guard stamp != lastDebugStamp else { return }
+        lastDebugStamp = stamp
+
+        let candidates: [ListenDebugSnapshot.Candidate] = debug.candidates.enumerated().map { idx, c in
+            ListenDebugSnapshot.Candidate(
+                id: "\(c.bpm)-\(c.lag)-\(idx)",
+                bpm: Int(c.bpm),
+                lag: Int(c.lag),
+                rawPeak: c.rawPeak,
+                score: c.score,
+                isWinner: c.isWinner,
+                promotedFrom: c.promotedFrom.map { Int($0.intValue) }
+            )
+        }
+
+        listenDebug = ListenDebugSnapshot(
+            waveform: Self.copyFloats(debug.waveform),
+            onset: Self.copyFloats(debug.onset),
+            acf: Self.copyFloats(debug.acf),
+            beatTimesSec: Self.copyFloats(debug.beatTimesSec),
+            durationSec: debug.durationSec,
+            confidence: debug.confidence,
+            accepted: debug.accepted,
+            octaveDoubled: debug.octaveDoubled,
+            bpm: bpmVal.map { Int($0) },
+            candidates: candidates,
+            acfMinLag: Int(DetectDebug.companion.ACF_MIN_LAG),
+            acfMaxLag: Int(DetectDebug.companion.ACF_MAX_LAG),
+            envelopeRate: OnsetEnvelope.shared.ENVELOPE_RATE
+        )
+    }
+
+    private static func copyFloats(_ arr: KotlinFloatArray) -> [Float] {
+        let n = Int(arr.size)
+        guard n > 0 else { return [] }
+        var out = [Float](repeating: 0, count: n)
+        for i in 0..<n {
+            out[i] = arr.get(index: Int32(i))
+        }
+        return out
+    }
+
+    private func refreshListenState() {
         let ds = controller.detectState.value
         if let success = ds as? DetectStateSuccess {
             let opts = success.options.map { $0.intValue }
             if opts != listenOptions { listenOptions = opts }
             assignIfChanged(&listenStatus, "Pick a tempo")
-        } else if ds is DetectStateListening {
+            assignIfChanged(&listenPhase, .success)
+            assignIfChanged(&listenProgress, 1)
+        } else if let listening = ds as? DetectStateListening {
             assignIfChanged(&listenStatus, "Listening…")
+            assignIfChanged(&listenPhase, .listening)
+            let progress = listening.progress
+            if abs(listenProgress - progress) > 0.01 { listenProgress = progress }
             if !listenOptions.isEmpty { listenOptions = [] }
         } else if ds is DetectStateAnalyzing {
-            assignIfChanged(&listenStatus, "Analyzing…")
+            assignIfChanged(&listenStatus, "Finding the beat…")
+            assignIfChanged(&listenPhase, .analyzing)
+            assignIfChanged(&listenProgress, 1)
             if !listenOptions.isEmpty { listenOptions = [] }
         } else if let failed = ds as? DetectStateFailed {
-            assignIfChanged(&listenStatus, failed.reason.name)
+            let reason = failed.reason.name
+            let message: String
+            switch reason {
+            case "NO_CLEAR_BEAT": message = "Couldn't find a beat"
+            case "MIC_UNAVAILABLE": message = "Mic unavailable"
+            case "PERMISSION_DENIED": message = "Mic access needed"
+            case "CANCELLED": message = ""
+            default: message = reason
+            }
+            if reason == "CANCELLED" {
+                assignIfChanged(&listenPhase, .idle)
+                assignIfChanged(&listenStatus, "")
+            } else {
+                assignIfChanged(&listenPhase, .failed)
+                assignIfChanged(&listenStatus, message)
+            }
+            assignIfChanged(&listenProgress, 0)
             if !listenOptions.isEmpty { listenOptions = [] }
         } else {
+            assignIfChanged(&listenPhase, .idle)
             if !isPlaying { assignIfChanged(&listenStatus, "") }
+            assignIfChanged(&listenProgress, 0)
             if !listenOptions.isEmpty { listenOptions = [] }
         }
     }

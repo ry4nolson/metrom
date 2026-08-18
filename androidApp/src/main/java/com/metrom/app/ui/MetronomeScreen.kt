@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.metrom.app.ui
 
 import android.Manifest
@@ -9,6 +11,11 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -24,10 +31,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -54,10 +62,10 @@ import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.Hearing
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -107,7 +115,6 @@ import com.metrom.shared.detect.DetectDebug
 import com.metrom.shared.detect.DetectState
 import com.metrom.shared.detect.FailReason
 import com.metrom.shared.detect.OnsetEnvelope
-import com.metrom.shared.domain.AccentNote
 import com.metrom.shared.domain.BeatAccent
 import com.metrom.shared.domain.MetronomeLimits
 import com.metrom.shared.domain.MutePattern
@@ -118,12 +125,16 @@ import com.metrom.shared.domain.TimeSignature
 import com.metrom.shared.practice.MetronomeUiState
 import com.metrom.app.ui.theme.Ash
 import com.metrom.app.ui.theme.Bone
+import com.metrom.app.ui.theme.BackgroundBottom
+import com.metrom.app.ui.theme.BackgroundTop
 import com.metrom.app.ui.theme.Copper
 import com.metrom.app.ui.theme.Ember
+import com.metrom.app.ui.theme.EmberDeep
 import com.metrom.app.ui.theme.EmberSoft
 import com.metrom.app.ui.theme.Ink
 import com.metrom.app.ui.theme.InkElevated
 import com.metrom.app.ui.theme.InkLine
+import com.metrom.app.ui.theme.LocalMetromPalette
 import com.metrom.app.ui.theme.Mist
 import com.metrom.app.ui.theme.PulseAccent
 import kotlinx.coroutines.delay
@@ -140,9 +151,14 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val detectState by viewModel.detectState.collectAsStateWithLifecycle()
     val detectDebug by viewModel.detectDebug.collectAsStateWithLifecycle()
+    val colorTheme by viewModel.theme.collectAsStateWithLifecycle()
+    val savedThemes by viewModel.savedThemes.collectAsStateWithLifecycle()
+    val customMeters by viewModel.customMeters.collectAsStateWithLifecycle()
     val isLandscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val horizontalPad = if (isLandscape) 20.dp else 24.dp
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var openMeters by rememberSaveable { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -150,9 +166,9 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF121218),
+                        BackgroundTop,
                         Ink,
-                        Color(0xFF08080A)
+                        BackgroundBottom
                     )
                 )
             )
@@ -172,6 +188,11 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
                     detectDebug = detectDebug,
                     viewModel = viewModel,
                     horizontalPad = horizontalPad,
+                    onOpenSettings = { showSettings = true },
+                    onOpenCustomMeters = {
+                        openMeters = true
+                        showSettings = true
+                    },
                     modifier = Modifier.weight(1f)
                 )
             } else {
@@ -181,6 +202,11 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
                     detectDebug = detectDebug,
                     viewModel = viewModel,
                     horizontalPad = horizontalPad,
+                    onOpenSettings = { showSettings = true },
+                    onOpenCustomMeters = {
+                        openMeters = true
+                        showSettings = true
+                    },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -190,6 +216,26 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
                 viewModel = viewModel,
                 landscape = isLandscape,
                 horizontalPad = horizontalPad
+            )
+        }
+
+        AnimatedVisibility(
+            visible = showSettings,
+            modifier = Modifier.fillMaxSize(),
+            enter = fadeIn() + slideInHorizontally { it },
+            exit = fadeOut() + slideOutHorizontally { it }
+        ) {
+            SettingsScreen(
+                state = state,
+                viewModel = viewModel,
+                colorTheme = colorTheme,
+                savedThemes = savedThemes,
+                customMeters = customMeters,
+                openMeters = openMeters,
+                onClose = {
+                    showSettings = false
+                    openMeters = false
+                }
             )
         }
     }
@@ -202,6 +248,8 @@ private fun PortraitBody(
     detectDebug: DetectDebug?,
     viewModel: MetronomeViewModel,
     horizontalPad: Dp,
+    onOpenSettings: () -> Unit,
+    onOpenCustomMeters: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -211,7 +259,7 @@ private fun PortraitBody(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        TopBar(state, viewModel)
+        TopBar(state, viewModel, onOpenSettings)
         Spacer(modifier = Modifier.height(10.dp))
         BeatRail(
             state = state,
@@ -243,7 +291,8 @@ private fun PortraitBody(
             state = state,
             detectState = detectState,
             detectDebug = detectDebug,
-            viewModel = viewModel
+            viewModel = viewModel,
+            onOpenCustomMeters = onOpenCustomMeters
         )
         Spacer(modifier = Modifier.height(24.dp))
     }
@@ -256,6 +305,8 @@ private fun LandscapeBody(
     detectDebug: DetectDebug?,
     viewModel: MetronomeViewModel,
     horizontalPad: Dp,
+    onOpenSettings: () -> Unit,
+    onOpenCustomMeters: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -271,7 +322,7 @@ private fun LandscapeBody(
                 .fillMaxHeight(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            TopBar(state, viewModel)
+            TopBar(state, viewModel, onOpenSettings)
             Spacer(modifier = Modifier.height(8.dp))
             BeatRail(
                 state = state,
@@ -307,7 +358,8 @@ private fun LandscapeBody(
                 state = state,
                 detectState = detectState,
                 detectDebug = detectDebug,
-                viewModel = viewModel
+                viewModel = viewModel,
+                onOpenCustomMeters = onOpenCustomMeters
             )
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -319,7 +371,8 @@ private fun SettingsColumn(
     state: MetronomeUiState,
     detectState: DetectState,
     detectDebug: DetectDebug?,
-    viewModel: MetronomeViewModel
+    viewModel: MetronomeViewModel,
+    onOpenCustomMeters: () -> Unit
 ) {
     ListenTempoStrip(
         state = state,
@@ -338,7 +391,7 @@ private fun SettingsColumn(
     TempoPresets(state.bpm, onSelect = viewModel::setBpm)
     PracticeStrip(state)
     Spacer(modifier = Modifier.height(18.dp))
-    ControlRows(state, viewModel)
+    ControlRows(state, viewModel, onOpenCustomMeters)
     Spacer(modifier = Modifier.height(14.dp))
     ExpandablePanel(
         title = "PRACTICE",
@@ -420,6 +473,7 @@ private fun Atmosphere(state: MetronomeUiState) {
     val accentRef = rememberUpdatedState(state.isAccentBeat)
     val beatAtRef = rememberUpdatedState(state.beatAtMs)
     val beatFlashRef = rememberUpdatedState(state.beatFlash)
+    val palette = LocalMetromPalette.current
     val ampDeg = 38f
 
     // Exact rail-beat period — never blend measured gaps (Handler jitter desynced the swing).
@@ -497,9 +551,9 @@ private fun Atmosphere(state: MetronomeUiState) {
         val pivot = Offset(size.width / 2f, size.height * 0.19f)
         val armLen = size.minDimension * 0.42f
         val glowColor = when {
-            state.sessionPhase == SessionPhase.SILENT -> Ash
-            accentRef.value -> PulseAccent
-            else -> Ember
+            state.sessionPhase == SessionPhase.SILENT -> palette.ash
+            accentRef.value -> palette.pulse
+            else -> palette.ember
         }
         val stage = Offset(size.width / 2f, size.height * 0.34f)
         val base = size.minDimension * 0.24f * if (state.isPlaying) breathe else 1f
@@ -520,7 +574,7 @@ private fun Atmosphere(state: MetronomeUiState) {
         val arcBox = androidx.compose.ui.geometry.Size(armLen * 2f, armLen * 2f)
         val arcOrigin = Offset(pivot.x - armLen, pivot.y - armLen)
         drawArc(
-            color = InkLine.copy(alpha = 0.4f),
+            color = palette.inkLine.copy(alpha = 0.4f),
             startAngle = 90f - 50f,
             sweepAngle = 100f,
             useCenter = false,
@@ -533,7 +587,7 @@ private fun Atmosphere(state: MetronomeUiState) {
             val inner = armLen * 0.92f
             val outer = armLen * 1.02f
             drawLine(
-                color = Mist.copy(alpha = if (tick == 0f) 0.35f else 0.28f),
+                color = palette.mist.copy(alpha = if (tick == 0f) 0.35f else 0.28f),
                 start = Offset(
                     pivot.x + (inner * sin(tickRad)).toFloat(),
                     pivot.y + (inner * cos(tickRad)).toFloat()
@@ -574,14 +628,14 @@ private fun Atmosphere(state: MetronomeUiState) {
         }
 
         drawLine(
-            color = Mist.copy(alpha = if (state.isPlaying) 0.78f else 0.3f),
+            color = palette.mist.copy(alpha = if (state.isPlaying) 0.78f else 0.3f),
             start = pivot,
             end = tip,
             strokeWidth = 2.4.dp.toPx(),
             cap = StrokeCap.Round
         )
         drawCircle(
-            color = Copper.copy(alpha = 0.85f),
+            color = palette.copper.copy(alpha = 0.85f),
             radius = 2.4.dp.toPx(),
             center = tip
         )
@@ -606,15 +660,15 @@ private fun Atmosphere(state: MetronomeUiState) {
                 brush = Brush.verticalGradient(
                     colors = listOf(
                         glowColor.copy(alpha = 0.98f),
-                        Ember.copy(alpha = 0.9f),
-                        Color(0xFF8B2E14)
+                        palette.ember.copy(alpha = 0.9f),
+                        palette.emberDeep
                     ),
                     startY = weightCenter.y - h / 2f,
                     endY = weightCenter.y + h / 2f
                 )
             )
             drawLine(
-                color = Bone.copy(alpha = 0.35f),
+                color = palette.bone.copy(alpha = 0.35f),
                 start = Offset(weightCenter.x, weightCenter.y - h * 0.28f),
                 end = Offset(weightCenter.x, weightCenter.y + h * 0.28f),
                 strokeWidth = 1.6.dp.toPx(),
@@ -622,13 +676,13 @@ private fun Atmosphere(state: MetronomeUiState) {
             )
         }
 
-        drawCircle(color = InkElevated, radius = 7.dp.toPx(), center = pivot)
+        drawCircle(color = palette.inkElevated, radius = 7.dp.toPx(), center = pivot)
         drawCircle(
-            color = Copper.copy(alpha = 0.95f),
+            color = palette.copper.copy(alpha = 0.95f),
             radius = 4.dp.toPx() + hit * 1.2.dp.toPx(),
             center = pivot
         )
-        drawCircle(color = Bone.copy(alpha = 0.35f), radius = 1.6.dp.toPx(), center = pivot)
+        drawCircle(color = palette.bone.copy(alpha = 0.35f), radius = 1.6.dp.toPx(), center = pivot)
 
         if (hit > 0.05f) {
             drawCircle(
@@ -641,7 +695,11 @@ private fun Atmosphere(state: MetronomeUiState) {
 }
 
 @Composable
-private fun TopBar(state: MetronomeUiState, viewModel: MetronomeViewModel) {
+private fun TopBar(
+    state: MetronomeUiState,
+    viewModel: MetronomeViewModel,
+    onOpenSettings: () -> Unit
+) {
     var saving by remember { mutableStateOf(false) }
     var saveName by remember { mutableStateOf("") }
 
@@ -678,11 +736,11 @@ private fun TopBar(state: MetronomeUiState, viewModel: MetronomeViewModel) {
                 tint = if (state.muted) Ash else Bone
             )
         }
-        IconButton(onClick = viewModel::toggleHaptics) {
+        IconButton(onClick = onOpenSettings) {
             Icon(
-                imageVector = Icons.Rounded.Vibration,
-                contentDescription = "Haptics",
-                tint = if (state.haptics) Ember else Ash
+                imageVector = Icons.Rounded.Settings,
+                contentDescription = "Settings",
+                tint = Bone
             )
         }
     }
@@ -935,11 +993,10 @@ private fun BeatRail(
 @Composable
 private fun TempoPresets(currentBpm: Int, onSelect: (Int) -> Unit) {
     val presets = listOf(60, 72, 80, 92, 100, 120, 140, 160)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         presets.forEach { bpm ->
             ChoiceChip(
@@ -1167,14 +1224,16 @@ private fun ListenTempoStrip(
                         modifier = Modifier.size(36.dp),
                         contentAlignment = Alignment.Center
                     ) {
+                        val inkLine = InkLine
+                        val ember = Ember
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val stroke = 3.dp.toPx()
                             drawCircle(
-                                color = InkLine,
+                                color = inkLine,
                                 style = Stroke(width = stroke)
                             )
                             drawArc(
-                                color = Ember,
+                                color = ember,
                                 startAngle = -90f,
                                 sweepAngle = 360f * ds.progress,
                                 useCenter = false,
@@ -1219,12 +1278,10 @@ private fun ListenTempoStrip(
                         style = MaterialTheme.typography.labelLarge,
                         color = Bone
                     )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         ds.options.forEach { bpm ->
                             ChoiceChip(
@@ -1429,7 +1486,7 @@ private fun ListenDebugPanel(
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(
                                     if (c.isWinner) Ember.copy(alpha = 0.14f)
-                                    else Ink.copy(alpha = 0.35f)
+                                    else InkElevated
                                 )
                                 .border(
                                     1.dp,
@@ -1486,6 +1543,8 @@ private fun DebugWaveform(
     durationSec: Float,
     modifier: Modifier = Modifier
 ) {
+    val mist = Mist
+    val emberSoft = EmberSoft
     Canvas(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
@@ -1507,8 +1566,8 @@ private fun DebugWaveform(
             val y = midY - (samples[i] / maxAbs) * midY * 0.9f
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
-        drawPath(path, color = Mist, style = Stroke(width = 1.5f))
-        drawBeatMarkers(beatTimesSec, durationSec, EmberSoft.copy(alpha = 0.85f))
+        drawPath(path, color = mist, style = Stroke(width = 1.5f))
+        drawBeatMarkers(beatTimesSec, durationSec, emberSoft.copy(alpha = 0.85f))
     }
 }
 
@@ -1519,6 +1578,8 @@ private fun DebugOnset(
     durationSec: Float,
     modifier: Modifier = Modifier
 ) {
+    val copper = Copper
+    val ember = Ember
     Canvas(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
@@ -1536,8 +1597,8 @@ private fun DebugOnset(
             val y = size.height - (onset[i] / max) * size.height * 0.92f
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
-        drawPath(path, color = Copper, style = Stroke(width = 1.5f))
-        drawBeatMarkers(beatTimesSec, durationSec, Ember.copy(alpha = 0.9f))
+        drawPath(path, color = copper, style = Stroke(width = 1.5f))
+        drawBeatMarkers(beatTimesSec, durationSec, ember.copy(alpha = 0.9f))
     }
 }
 
@@ -1547,6 +1608,8 @@ private fun DebugAcf(
     winnerBpm: Int?,
     modifier: Modifier = Modifier
 ) {
+    val mist = Mist
+    val ember = Ember
     Canvas(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
@@ -1572,14 +1635,14 @@ private fun DebugAcf(
             val y = size.height - ((acf[lag] - minV) / span) * size.height * 0.92f
             if (lag == lo) path.moveTo(x, y) else path.lineTo(x, y)
         }
-        drawPath(path, color = Mist, style = Stroke(width = 1.5f))
+        drawPath(path, color = mist, style = Stroke(width = 1.5f))
         if (winnerBpm != null && winnerBpm > 0) {
             val lag = (60f * OnsetEnvelope.ENVELOPE_RATE / winnerBpm)
                 .roundToInt()
                 .coerceIn(lo, hi)
             val x = (lag - lo).toFloat() / count * size.width
             drawLine(
-                color = Ember,
+                color = ember,
                 start = Offset(x, 0f),
                 end = Offset(x, size.height),
                 strokeWidth = 2f
@@ -1682,7 +1745,12 @@ private fun TempoHero(
 }
 
 @Composable
-private fun ControlRows(state: MetronomeUiState, viewModel: MetronomeViewModel) {
+private fun ControlRows(
+    state: MetronomeUiState,
+    viewModel: MetronomeViewModel,
+    onOpenCustomMeters: () -> Unit
+) {
+    val customMeters by viewModel.customMeters.collectAsStateWithLifecycle()
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         LabeledChipRow(label = "METER") {
             TimeSignature.COMMON.forEach { sig ->
@@ -1692,11 +1760,25 @@ private fun ControlRows(state: MetronomeUiState, viewModel: MetronomeViewModel) 
                     onClick = { viewModel.setTimeSignature(sig) }
                 )
             }
+            customMeters.forEach { sig ->
+                ChoiceChip(
+                    label = sig.label,
+                    selected = state.timeSignature == sig,
+                    onClick = { viewModel.setTimeSignature(sig) }
+                )
+            }
             ChoiceChip(
-                label = "Accents",
+                label = "Custom",
                 selected = false,
-                onClick = viewModel::resetBeatAccents
+                onClick = onOpenCustomMeters
             )
+            if (state.accentsCustomized) {
+                ChoiceChip(
+                    label = "Reset accents",
+                    selected = false,
+                    onClick = viewModel::resetBeatAccents
+                )
+            }
         }
         LabeledChipRow(label = "GRID") {
             Subdivision.entries.forEach { sub ->
@@ -1734,35 +1816,6 @@ private fun ControlRows(state: MetronomeUiState, viewModel: MetronomeViewModel) 
                         if (!state.groupTempo) viewModel.toggleGroupTempo()
                     }
                 )
-            }
-        }
-        LabeledChipRow(label = "SOUND") {
-            state.toneOptions.forEach { tone ->
-                ChoiceChip(
-                    label = tone.label,
-                    selected = state.tone.id == tone.id,
-                    onClick = { viewModel.setTone(tone) }
-                )
-            }
-        }
-        if (state.tone.supportsPitchAccent) {
-            LabeledChipRow(label = "ONE") {
-                AccentNote.entries.forEach { note ->
-                    ChoiceChip(
-                        label = note.label,
-                        selected = state.accentNote == note,
-                        onClick = { viewModel.setAccentNote(note) }
-                    )
-                }
-            }
-            LabeledChipRow(label = "OTHERS") {
-                AccentNote.entries.forEach { note ->
-                    ChoiceChip(
-                        label = note.label,
-                        selected = state.restNote == note,
-                        onClick = { viewModel.setRestNote(note) }
-                    )
-                }
             }
         }
     }
@@ -1965,7 +2018,7 @@ private fun SongRow(
 }
 
 @Composable
-private fun LabeledChipRow(label: String, content: @Composable () -> Unit) {
+internal fun LabeledChipRow(label: String, content: @Composable () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = label,
@@ -1973,11 +2026,10 @@ private fun LabeledChipRow(label: String, content: @Composable () -> Unit) {
             color = Ash,
             modifier = Modifier.padding(bottom = 8.dp, start = 2.dp)
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             content()
         }
@@ -1985,12 +2037,12 @@ private fun LabeledChipRow(label: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     Box(
         modifier = Modifier
             .clip(shape)
-            .background(if (selected) Ember.copy(alpha = 0.18f) else Ink.copy(alpha = 0.35f))
+            .background(if (selected) Ember.copy(alpha = 0.18f) else InkElevated)
             .border(
                 width = 1.dp,
                 color = if (selected) Ember.copy(alpha = 0.7f) else InkLine,
@@ -2050,7 +2102,7 @@ private fun TransportRow(
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(EmberSoft, Ember, Color(0xFFB83412))
+                        colors = listOf(EmberSoft, Ember, EmberDeep)
                     )
                 )
                 .clickable(onClick = viewModel::togglePlay),
@@ -2106,7 +2158,7 @@ private fun TransportChip(
 }
 
 @Composable
-private fun VolumeRow(
+internal fun VolumeRow(
     state: MetronomeUiState,
     viewModel: MetronomeViewModel,
     modifier: Modifier = Modifier
@@ -2193,6 +2245,7 @@ private fun secondaryLabel(state: MetronomeUiState): String {
     return parts.joinToString(" · ")
 }
 
+@Composable
 private fun phaseColor(phase: SessionPhase): Color = when (phase) {
     SessionPhase.IDLE -> Ash
     SessionPhase.COUNT_IN -> Copper
