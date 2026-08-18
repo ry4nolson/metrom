@@ -84,3 +84,20 @@ data class Setlist(
     val pauseBetweenMs: Int = 0,
     val songIds: List<String> = emptyList(),
 )
+
+data class Referencer(
+    val id: String,
+    val name: String,
+)
+
+data class Usage(
+    val referencedBy: List<Referencer> = emptyList(),
+) {
+    val count: Int get() = referencedBy.size
+    val isReferenced: Boolean get() = referencedBy.isNotEmpty()
+}
+
+sealed class DeleteResult {
+    data object Deleted : DeleteResult()
+    data class Blocked(val usage: Usage) : DeleteResult()
+}

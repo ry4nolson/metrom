@@ -100,7 +100,7 @@ data class ColorTheme(
             emberSoft = "6CC8FF",
             emberDeep = "1A7CC7",
             copper = "7EB3C9",
-            pulse = "7EE0FF",
+            pulse = "9D8CFF",
             ink = "070B12",
             inkElevated = "101820",
             inkLine = "243848",
@@ -127,57 +127,6 @@ data class ColorTheme(
             backgroundTop = "0C1610",
             backgroundBottom = "050806",
         )
-        val VIOLET = stage(
-            id = "violet",
-            label = "Violet",
-            ember = "A56BFF",
-            emberSoft = "C49BFF",
-            emberDeep = "6E3AD4",
-            copper = "C4A5E8",
-            pulse = "E07AFF",
-            ink = "0C0814",
-            inkElevated = "181222",
-            inkLine = "382850",
-            ash = "8A8096",
-            mist = "D0C4DC",
-            bone = "F2ECF6",
-            backgroundTop = "140E1C",
-            backgroundBottom = "08060C",
-        )
-        val ROSE = stage(
-            id = "rose",
-            label = "Rose",
-            ember = "FF4D7A",
-            emberSoft = "FF7A9C",
-            emberDeep = "C41E4A",
-            copper = "E8A0B0",
-            pulse = "FFB0C8",
-            ink = "12080C",
-            inkElevated = "1E1016",
-            inkLine = "442830",
-            ash = "968088",
-            mist = "DCC4CC",
-            bone = "F6ECF0",
-            backgroundTop = "1A0C12",
-            backgroundBottom = "0A0608",
-        )
-        val GOLD = stage(
-            id = "gold",
-            label = "Gold",
-            ember = "F0B429",
-            emberSoft = "FFD56A",
-            emberDeep = "C48A12",
-            copper = "E0C090",
-            pulse = "FFE28A",
-            ink = "100C08",
-            inkElevated = "1C1610",
-            inkLine = "3E3220",
-            ash = "8B8270",
-            mist = "D8D0C0",
-            bone = "F6F0E4",
-            backgroundTop = "18140A",
-            backgroundBottom = "0A0804",
-        )
         val PAPER = paper(
             id = "paper",
             label = "Paper",
@@ -186,6 +135,7 @@ data class ColorTheme(
             emberDeep = "B83214",
             copper = "A56B3C",
             pulse = "C48A12",
+            ash = "736C62",
         )
         val SNOW = paper(
             id = "snow",
@@ -194,11 +144,11 @@ data class ColorTheme(
             emberSoft = "1568A8",
             emberDeep = "0E4F86",
             copper = "4A7A90",
-            pulse = "1280A8",
+            pulse = "5B3FB0",
             ink = "F3F7FA",
             inkElevated = "FFFFFF",
             inkLine = "D0DCE6",
-            ash = "6E7A84",
+            ash = "66717A",
             mist = "3E4A54",
             bone = "141A20",
             backgroundTop = "F7FAFC",
@@ -211,7 +161,7 @@ data class ColorTheme(
             emberSoft = "A81840",
             emberDeep = "8C1436",
             copper = "A06070",
-            pulse = "C45A78",
+            pulse = "9B3FC4",
             ink = "FAF3F4",
             inkElevated = "FFFCFC",
             inkLine = "E8D4D8",
@@ -223,7 +173,7 @@ data class ColorTheme(
         )
 
         val PRESETS: List<ColorTheme> = listOf(
-            EMBER, ICE, FOREST, VIOLET, ROSE, GOLD, PAPER, SNOW, BLOOM,
+            EMBER, ICE, FOREST, PAPER, SNOW, BLOOM,
         )
 
         fun preset(id: String): ColorTheme = PRESETS.find { it.id == id } ?: EMBER
