@@ -55,9 +55,7 @@ phase.shell_script = <<~'SCRIPT'
     GRADLE_TASK=":shared:linkDebugFrameworkIosArm64"
   fi
 
-  if [[ ! -d "$FRAME" ]]; then
-    ./gradlew -p . "$GRADLE_TASK"
-  fi
+  ./gradlew -p . "$GRADLE_TASK"
   if [[ ! -d "$FRAME" ]]; then
     echo "error: MetromShared.framework missing at $FRAME" >&2
     exit 1

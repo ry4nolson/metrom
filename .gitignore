@@ -56,5 +56,6 @@ garmin/*.iq
 
 # Local scratch / archives
 .tmp-chug/
+.cursor/dev-reload/
 *.zip
 app.zip

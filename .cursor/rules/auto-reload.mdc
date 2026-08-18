@@ -1,0 +1,15 @@
+---
+description: Auto-rebuild and relaunch Android/iOS after app source changes
+alwaysApply: true
+---
+
+# Auto reload
+
+After changing `androidApp/`, `shared/src/`, or `iosApp/Metrom/` sources, do not wait for a manual install.
+
+A Cursor hook queues `scripts/dev-reload-queue.sh`, which debounces 3s then runs `scripts/dev-reload.sh` (Android `installDebug` + relaunch, iOS `xcodebuild` + simctl relaunch). A file watcher covers editor saves.
+
+- Do not also spawn a second Gradle/Xcode install in the same turn unless the hook/watcher is clearly dead.
+- If you need an immediate reload, run `scripts/dev-reload-queue.sh` once at the end of the turn and return.
+- Skip Garmin. Skip reload for markdown, build outputs, and `.xcuserstate`.
+- Logs: `/tmp/metrom-reload.log`

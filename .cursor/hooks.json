@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "hooks": {
+    "workspaceOpen": [
+      {
+        "command": ".cursor/hooks/start-watch.sh",
+        "timeout": 10
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": ".cursor/hooks/start-watch.sh",
+        "timeout": 10
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": ".cursor/hooks/queue-reload.sh",
+        "timeout": 15
+      }
+    ],
+    "afterTabFileEdit": [
+      {
+        "command": ".cursor/hooks/queue-reload.sh",
+        "timeout": 15
+      }
+    ]
+  }
+}
