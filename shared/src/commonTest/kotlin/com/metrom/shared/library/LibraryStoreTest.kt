@@ -113,6 +113,31 @@ class LibraryStoreTest {
     }
 
     @Test
+    fun sectionUsageListsReferencingSongs() {
+        val (sections, songs, _) = stores()
+        sections.upsert(sampleSection("sec-u", "U", 4, 100))
+        songs.upsert(Song("song-a", "Alpha", sectionRefs = listOf(SongSectionRef("sec-u"))))
+        songs.upsert(Song("song-b", "Beta", sectionRefs = listOf(SongSectionRef("sec-u"))))
+        val usage = sections.usage("sec-u")
+        assertEquals(2, usage.count)
+        assertEquals(listOf("song-a" to "Alpha", "song-b" to "Beta"), usage.referencedBy.map { it.id to it.name })
+        assertEquals(2, sections.referenceCount("sec-u"))
+    }
+
+    @Test
+    fun songUsageListsReferencingSetlists() {
+        val (sections, songs, setlists) = stores()
+        sections.upsert(sampleSection("sec-w", "W", 2, 80))
+        songs.upsert(Song("song-w", "W", sectionRefs = listOf(SongSectionRef("sec-w"))))
+        setlists.upsert(Setlist("set-1", "One", songIds = listOf("song-w")))
+        setlists.upsert(Setlist("set-2", "Two", songIds = listOf("song-w")))
+        val usage = songs.usage("song-w")
+        assertEquals(2, usage.count)
+        assertEquals(listOf("set-1" to "One", "set-2" to "Two"), usage.referencedBy.map { it.id to it.name })
+        assertEquals(2, songs.referenceCount("song-w"))
+    }
+
+    @Test
     fun deletingReferencedSongIsRestrictedUntilUnlinked() {
         val (sections, songs, setlists) = stores()
         sections.upsert(sampleSection("sec-q", "Q", 2, 80))

@@ -45,12 +45,10 @@ private struct ThemeCard: View {
     var body: some View {
         let palette = MetromPalette(theme: theme)
         VStack(alignment: .leading, spacing: 8) {
-            swatchRow([theme.ember, theme.emberSoft, theme.emberDeep, theme.copper, theme.pulse])
-            swatchRow([theme.ink, theme.inkLine], slots: 5)
             HStack(spacing: 4) {
                 Text(theme.label)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(selected ? palette.emberSoft : palette.mist)
+                    .foregroundStyle(palette.bone)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                 Spacer(minLength: 0)
@@ -71,32 +69,33 @@ private struct ThemeCard: View {
                     .buttonStyle(.plain)
                 }
             }
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(palette.pulse)
+                    .frame(width: 16, height: 16)
+                ForEach(0..<3, id: \.self) { _ in
+                    Circle()
+                        .fill(palette.ember)
+                        .frame(width: 11, height: 11)
+                }
+            }
+            Text("allegro 140")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(palette.ash)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(palette.inkElevated)
+                .fill(palette.ink)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(selected ? palette.ember : palette.inkLine, lineWidth: 1)
         )
         .onTapGesture(perform: onClick)
-    }
-
-    private func swatchRow(_ hexes: [String], slots: Int = 5) -> some View {
-        HStack(spacing: 4) {
-            ForEach(Array(hexes.enumerated()), id: \.offset) { _, hex in
-                Circle()
-                    .fill(Color(hex: hex))
-                    .aspectRatio(1, contentMode: .fit)
-                    .overlay(Circle().stroke(Color.black.opacity(0.18), lineWidth: 0.5))
-            }
-            ForEach(0..<max(0, slots - hexes.count), id: \.self) { _ in
-                Color.clear.aspectRatio(1, contentMode: .fit)
-            }
-        }
     }
 }
 

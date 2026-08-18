@@ -91,10 +91,10 @@ data class Referencer(
 )
 
 data class Usage(
-    val referencedBy: List<Referencer> = emptyList(),
+    val count: Int,
+    val referencedBy: List<Referencer>,
 ) {
-    val count: Int get() = referencedBy.size
-    val isReferenced: Boolean get() = referencedBy.isNotEmpty()
+    val isReferenced: Boolean get() = count > 0
 }
 
 sealed class DeleteResult {

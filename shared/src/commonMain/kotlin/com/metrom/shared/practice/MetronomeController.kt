@@ -2,9 +2,11 @@ package com.metrom.shared.practice
 
 import com.metrom.shared.audio.SampleToneCache
 import com.metrom.shared.db.MetromDatabase
+import com.metrom.shared.library.DeleteResult
 import com.metrom.shared.library.Section
 import com.metrom.shared.library.Setlist
 import com.metrom.shared.library.Song
+import com.metrom.shared.library.Usage
 import com.metrom.shared.randomUuid
 import com.metrom.shared.detect.DetectDebug
 import com.metrom.shared.detect.DetectState
@@ -531,11 +533,26 @@ class MetronomeController(
         _state.update { it.copy(activeSavedSectionId = section.id, tapHint = section.displayName().uppercase()) }
     }
 
-    fun deleteSection(section: Section) {
+    fun sectionUsage(sectionId: String): Usage = library.sectionUsage(sectionId)
+
+    fun songUsage(songId: String): Usage = library.songUsage(songId)
+
+    fun deleteSection(section: Section): DeleteResult {
+        val usage = library.sectionUsage(section.id)
+        if (usage.isReferenced) return DeleteResult.Blocked(usage)
         library.deleteSection(section.id)
         reloadLibrary {
             it.copy(activeSavedSectionId = if (it.activeSavedSectionId == section.id) null else it.activeSavedSectionId)
         }
+        return DeleteResult.Deleted
+    }
+
+    fun deleteSong(song: Song): DeleteResult {
+        val usage = library.songUsage(song.id)
+        if (usage.isReferenced) return DeleteResult.Blocked(usage)
+        library.deleteSong(song.id)
+        reloadLibrary()
+        return DeleteResult.Deleted
     }
 
     fun renameSection(section: Section, name: String) {
@@ -567,10 +584,11 @@ class MetronomeController(
         reloadLibrary { it.copy(tapHint = "RENAMED") }
     }
 
-    fun deleteSetlist(id: String) {
+    fun deleteSetlist(id: String): DeleteResult {
         library.deleteSetlist(id)
         reloadLibrary()
         if (_state.value.activeSetlistId == id) exitSetlist()
+        return DeleteResult.Deleted
     }
 
     fun addSectionFromCurrent(setlistId: String) {
@@ -580,6 +598,7 @@ class MetronomeController(
         reloadLibrary { it.copy(tapHint = "SECTION ADDED") }
     }
 
+    /** Unlink a section from a song/setlist slot. Does not delete the Section. */
     fun removeSection(setlistId: String, sectionId: String) {
         val s = _state.value
         val setlist = s.setlists.firstOrNull { it.id == setlistId } ?: return

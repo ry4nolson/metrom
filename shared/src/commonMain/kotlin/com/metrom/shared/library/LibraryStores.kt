@@ -62,11 +62,12 @@ class SectionStore(private val db: MetromDatabase) {
     fun referenceCount(id: String): Long =
         db.metromQueries.countSongsUsingSection(id).executeAsOne()
 
-    fun usage(id: String): Usage = Usage(
-        referencedBy = db.metromQueries.selectSongsUsingSection(id).executeAsList().map {
+    fun usage(id: String): Usage {
+        val referencedBy = db.metromQueries.selectSongsUsingSection(id).executeAsList().map {
             Referencer(id = it.id, name = it.name)
-        },
-    )
+        }
+        return Usage(count = referencedBy.size, referencedBy = referencedBy)
+    }
 }
 
 class SongStore(private val db: MetromDatabase) {
@@ -111,11 +112,12 @@ class SongStore(private val db: MetromDatabase) {
     fun referenceCount(id: String): Long =
         db.metromQueries.countSetlistsUsingSong(id).executeAsOne()
 
-    fun usage(id: String): Usage = Usage(
-        referencedBy = db.metromQueries.selectSetlistsUsingSong(id).executeAsList().map {
+    fun usage(id: String): Usage {
+        val referencedBy = db.metromQueries.selectSetlistsUsingSong(id).executeAsList().map {
             Referencer(id = it.id, name = it.name)
-        },
-    )
+        }
+        return Usage(count = referencedBy.size, referencedBy = referencedBy)
+    }
 
     private fun com.metrom.shared.db.Song.toDomain(): Song = Song(
         id = id,

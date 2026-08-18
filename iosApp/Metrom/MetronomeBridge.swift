@@ -428,7 +428,7 @@ final class MetronomeBridge: ObservableObject {
 
     func deleteSection(id: String) {
         if let section = ui?.savedSections.first(where: { $0.id == id }) {
-            controller.deleteSection(section: section)
+            _ = controller.deleteSection(section: section)
         }
         refreshFromState()
     }
@@ -444,7 +444,7 @@ final class MetronomeBridge: ObservableObject {
     }
 
     func deleteSetlist(id: String) {
-        controller.deleteSetlist(id: id)
+        _ = controller.deleteSetlist(id: id)
         refreshFromState()
     }
 

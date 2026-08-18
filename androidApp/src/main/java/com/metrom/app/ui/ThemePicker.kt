@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -120,7 +119,7 @@ private fun ThemeCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(palette.inkElevated)
+            .background(palette.ink)
             .border(
                 1.dp,
                 if (selected) palette.ember else palette.inkLine,
@@ -130,13 +129,11 @@ private fun ThemeCard(
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        SwatchRow(theme.accentSwatches().map { hexColor(it) }, slots = 5)
-        SwatchRow(theme.stageSwatches().map { hexColor(it) }, slots = 5)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 theme.label,
                 style = MaterialTheme.typography.labelMedium,
-                color = if (selected) palette.emberSoft else palette.mist,
+                color = palette.bone,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
@@ -162,28 +159,32 @@ private fun ThemeCard(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun SwatchRow(colors: List<Color>, slots: Int) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        colors.forEach { c ->
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .aspectRatio(1f)
+                    .size(16.dp)
                     .clip(CircleShape)
-                    .background(c)
-                    .border(0.5.dp, Color.Black.copy(alpha = 0.18f), CircleShape)
+                    .background(palette.pulse)
             )
+            repeat(3) {
+                Box(
+                    modifier = Modifier
+                        .size(11.dp)
+                        .clip(CircleShape)
+                        .background(palette.ember)
+                )
+            }
         }
-        repeat((slots - colors.size).coerceAtLeast(0)) {
-            Spacer(Modifier.weight(1f))
-        }
+        Text(
+            "allegro 140",
+            style = MaterialTheme.typography.labelSmall,
+            color = palette.ash,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

@@ -246,12 +246,12 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     fun toggleTrainerAutoStop() = controller.toggleTrainerAutoStop()
     fun saveCurrentSection(name: String? = null) = controller.saveCurrentSection(name)
     fun loadSection(section: Section) = controller.loadSection(section)
-    fun deleteSection(section: Section) = controller.deleteSection(section)
+    fun deleteSection(section: Section) { controller.deleteSection(section) }
     fun renameSection(section: Section, name: String) = controller.renameSection(section, name)
     fun updateActiveSection() = controller.updateActiveSection()
     fun createSetlist(name: String) = controller.createSetlist(name)
     fun renameSetlist(id: String, name: String) = controller.renameSetlist(id, name)
-    fun deleteSetlist(id: String) = controller.deleteSetlist(id)
+    fun deleteSetlist(id: String) { controller.deleteSetlist(id) }
     fun addSectionFromCurrent(setlistId: String) = controller.addSectionFromCurrent(setlistId)
     fun removeSection(setlistId: String, sectionId: String) = controller.removeSection(setlistId, sectionId)
     fun moveSection(setlistId: String, from: Int, to: Int) = controller.moveSection(setlistId, from, to)

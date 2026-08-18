@@ -1,6 +1,7 @@
 package com.metrom.shared.practice
 
 import com.metrom.shared.audio.SampleToneCache
+import com.metrom.shared.library.DeleteResult
 import com.metrom.shared.library.Section
 import com.metrom.shared.library.Setlist
 import com.metrom.shared.library.Song
@@ -32,6 +33,8 @@ import com.metrom.shared.platform.UiClock
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MetronomeControllerSetlistTest {
@@ -273,6 +276,120 @@ class MetronomeControllerSetlistTest {
         assertEquals(listOf(true, false), slots.map { it.autoAdvance })
         assertEquals(listOf(8, 16), slots.map { it.section.bars })
         assertEquals("Tune", loaded.state.value.songs.single().name)
+    }
+
+    @Test
+    fun deleteSectionBlockedWhileSongReferencesThenDeletedAfterUnlink() {
+        val h = harness()
+        val sections = SectionStore(h.database)
+        val songs = SongStore(h.database)
+        sections.upsert(sampleLibrarySection("sec-x", "Verse", 8, 100))
+        songs.upsert(Song("song-x", "Tune", sectionRefs = listOf(SongSectionRef("sec-x"))))
+        val controller = makeController(h.prefs, h.database)
+        val section = controller.state.value.sections.single { it.id == "sec-x" }
+
+        val usage = controller.sectionUsage("sec-x")
+        assertEquals(1, usage.count)
+        assertEquals("song-x", usage.referencedBy.single().id)
+        assertEquals("Tune", usage.referencedBy.single().name)
+
+        val blocked = controller.deleteSection(section)
+        assertTrue(blocked is DeleteResult.Blocked)
+        val blockedUsage = (blocked as DeleteResult.Blocked).usage
+        assertEquals(1, blockedUsage.count)
+        assertEquals("Tune", blockedUsage.referencedBy.single().name)
+        assertEquals("song-x", blockedUsage.referencedBy.single().id)
+        assertNotNull(SectionStore(h.database).get("sec-x"))
+
+        songs.setSections("song-x", emptyList())
+        val deleted = controller.deleteSection(section)
+        assertEquals(DeleteResult.Deleted, deleted)
+        assertNull(SectionStore(h.database).get("sec-x"))
+    }
+
+    @Test
+    fun deleteSectionSucceedsAfterRemoveSectionUnlink() {
+        val controller = controller()
+        persistAndLoad(controller, listOf(threeSectionSet().first()))
+        val setlistId = controller.state.value.setlists.single().id
+        val section = slots(controller).single().section
+        val blocked = controller.deleteSection(section)
+        assertTrue(blocked is DeleteResult.Blocked)
+        assertEquals(1, (blocked as DeleteResult.Blocked).usage.count)
+        assertNotNull(controller.state.value.sections.firstOrNull { it.id == section.id })
+
+        controller.removeSection(setlistId, section.id)
+        assertTrue(controller.state.value.setlists.single().songIds.isEmpty())
+        assertNotNull(controller.state.value.sections.firstOrNull { it.id == section.id })
+
+        val deleted = controller.deleteSection(section)
+        assertEquals(DeleteResult.Deleted, deleted)
+        assertTrue(controller.state.value.sections.none { it.id == section.id })
+    }
+
+    @Test
+    fun deleteSongBlockedWhileSetlistReferencesThenDeletedAfterUnlink() {
+        val h = harness()
+        val sections = SectionStore(h.database)
+        val songs = SongStore(h.database)
+        val setlists = SetlistStore(h.database)
+        sections.upsert(sampleLibrarySection("sec-y", "Y", 4, 90))
+        songs.upsert(Song("song-y", "Q", sectionRefs = listOf(SongSectionRef("sec-y"))))
+        setlists.upsert(Setlist("set-y", "Gig", songIds = listOf("song-y")))
+        val controller = makeController(h.prefs, h.database)
+        val song = controller.state.value.songs.single { it.id == "song-y" }
+
+        val usage = controller.songUsage("song-y")
+        assertEquals(1, usage.count)
+        assertEquals("set-y", usage.referencedBy.single().id)
+        assertEquals("Gig", usage.referencedBy.single().name)
+
+        val blocked = controller.deleteSong(song)
+        assertTrue(blocked is DeleteResult.Blocked)
+        val blockedUsage = (blocked as DeleteResult.Blocked).usage
+        assertEquals(1, blockedUsage.count)
+        assertEquals("Gig", blockedUsage.referencedBy.single().name)
+        assertNotNull(SongStore(h.database).get("song-y"))
+
+        setlists.setSongs("set-y", emptyList())
+        val deleted = controller.deleteSong(song)
+        assertEquals(DeleteResult.Deleted, deleted)
+        assertNull(SongStore(h.database).get("song-y"))
+        assertNotNull(SectionStore(h.database).get("sec-y"))
+    }
+
+    @Test
+    fun deleteSetlistCascadesSlotsKeepsSharedSongsAndCleansOrphanWrappers() {
+        val h = harness()
+        val sections = SectionStore(h.database)
+        val songs = SongStore(h.database)
+        val setlists = SetlistStore(h.database)
+        sections.upsert(sampleLibrarySection("sec-shared", "Shared", 4, 90))
+        songs.upsert(Song("song-shared", "Stay", sectionRefs = listOf(SongSectionRef("sec-shared"))))
+        setlists.upsert(Setlist("set-a", "A", songIds = listOf("song-shared")))
+        setlists.upsert(Setlist("set-b", "B", songIds = listOf("song-shared")))
+        val controller = makeController(h.prefs, h.database)
+
+        val shared = controller.deleteSetlist("set-a")
+        assertEquals(DeleteResult.Deleted, shared)
+        assertNull(SetlistStore(h.database).get("set-a"))
+        assertNotNull(SongStore(h.database).get("song-shared"))
+        assertEquals(listOf("song-shared"), SetlistStore(h.database).get("set-b")?.songIds)
+        assertNotNull(SectionStore(h.database).get("sec-shared"))
+    }
+
+    @Test
+    fun deleteSetlistCleansOrphanedWrapperSongsAndTheirUnreferencedSections() {
+        val controller = controller()
+        persistAndLoad(controller, listOf(threeSectionSet().first()))
+        val setlistId = controller.state.value.setlists.single().id
+        val songIds = controller.state.value.setlists.single().songIds
+        val sectionIds = slots(controller).map { it.section.id }
+        val cleaned = controller.deleteSetlist(setlistId)
+        assertEquals(DeleteResult.Deleted, cleaned)
+        assertTrue(controller.state.value.setlists.isEmpty())
+        songIds.forEach { id -> assertTrue(controller.state.value.songs.none { it.id == id }) }
+        sectionIds.forEach { id -> assertTrue(controller.state.value.sections.none { it.id == id }) }
     }
 
     private fun sectionConfig(controller: MetronomeController, index: Int) =

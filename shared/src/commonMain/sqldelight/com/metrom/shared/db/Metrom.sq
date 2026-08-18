@@ -86,6 +86,13 @@ DELETE FROM section WHERE id = ?;
 countSongsUsingSection:
 SELECT COUNT(*) FROM song_section WHERE section_id = ?;
 
+selectSongsUsingSection:
+SELECT DISTINCT song.id AS id, song.name AS name
+FROM song
+INNER JOIN song_section ON song.id = song_section.song_id
+WHERE song_section.section_id = ?
+ORDER BY song.name ASC, song.id ASC;
+
 selectAllSongs:
 SELECT * FROM song ORDER BY name ASC, id ASC;
 
@@ -103,6 +110,13 @@ DELETE FROM song WHERE id = ?;
 
 countSetlistsUsingSong:
 SELECT COUNT(*) FROM setlist_song WHERE song_id = ?;
+
+selectSetlistsUsingSong:
+SELECT DISTINCT setlist.id AS id, setlist.name AS name
+FROM setlist
+INNER JOIN setlist_song ON setlist.id = setlist_song.setlist_id
+WHERE setlist_song.song_id = ?
+ORDER BY setlist.name ASC, setlist.id ASC;
 
 clearSongSections:
 DELETE FROM song_section WHERE song_id = ?;

@@ -30,8 +30,16 @@ internal class LibraryPersistence(private val db: MetromDatabase) {
         sections.upsert(section)
     }
 
+    fun sectionUsage(sectionId: String) = sections.usage(sectionId)
+
+    fun songUsage(songId: String) = songs.usage(songId)
+
     fun deleteSection(id: String) {
         sections.delete(id)
+    }
+
+    fun deleteSong(id: String) {
+        songs.delete(id)
     }
 
     fun upsertSong(song: Song) {
@@ -99,9 +107,7 @@ internal class LibraryPersistence(private val db: MetromDatabase) {
             } else {
                 songs.upsert(song.copy(sectionRefs = remainingRefs))
             }
-            if (sections.referenceCount(sectionId) == 0L) {
-                sections.delete(sectionId)
-            }
+            // Unlink only: the Section row survives even when no song still references it.
         }
     }
 
