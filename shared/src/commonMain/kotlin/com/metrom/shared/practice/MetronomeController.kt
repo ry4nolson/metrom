@@ -97,8 +97,10 @@ class MetronomeController(
     private var lastBeatIndex = -1
     private var barIndex = 0
     private var beatSerial = 0L
-    private var pendingAdvance = false
+    private var pendingSetNav = PendingSetNav.NONE
     private var sectionStartBar = 0
+
+    private enum class PendingSetNav { NONE, NEXT, PREVIOUS, RESTART }
 
     private var listenCancel = false
     private var listenWorkerRunning = false
@@ -180,10 +182,8 @@ class MetronomeController(
         }
         lastBeatIndex = -1
         barIndex = 0
-        if (_state.value.inSetMode) {
-            sectionStartBar = 0
-            _state.update { it.copy(sectionBar = 0) }
-        }
+        pendingSetNav = PendingSetNav.NONE
+        if (_state.value.inSetMode) armLoadedSetFromTop()
         val s = _state.value
         if (s.trainerEnabled && !s.inSetMode) {
             engine.setBpm(s.bpm)
@@ -223,6 +223,7 @@ class MetronomeController(
         val clean = runner.stop(engine)
         lastBeatIndex = -1
         barIndex = 0
+        pendingSetNav = PendingSetNav.NONE
         _state.update {
             it.copy(
                 isPlaying = false,
@@ -653,7 +654,7 @@ class MetronomeController(
 
     fun loadSetlist(setlist: Setlist) {
         val resolved = _state.value.setlists.firstOrNull { it.id == setlist.id } ?: setlist
-        pendingAdvance = false
+        pendingSetNav = PendingSetNav.NONE
         sectionStartBar = barIndex
         val first = resolved.sections.firstOrNull()
         if (first == null) {
@@ -679,16 +680,28 @@ class MetronomeController(
     }
 
     fun advanceSection() {
-        if (!_state.value.inSetMode) return
-        pendingAdvance = true
-        if (!_state.value.isPlaying) maybeAdvanceSection(barIndex)
+        queueSetNav(PendingSetNav.NEXT)
+    }
+
+    fun previousSection() {
+        queueSetNav(PendingSetNav.PREVIOUS)
+    }
+
+    fun restartSet() {
+        queueSetNav(PendingSetNav.RESTART)
     }
 
     fun exitSetlist() {
-        pendingAdvance = false
+        pendingSetNav = PendingSetNav.NONE
         _state.update {
             it.copy(activeSetlistId = null, activeSectionIndex = -1, sectionBar = 0)
         }
+    }
+
+    private fun queueSetNav(nav: PendingSetNav) {
+        if (!_state.value.inSetMode) return
+        pendingSetNav = nav
+        if (!_state.value.isPlaying) maybeAdvanceSection(barIndex)
     }
 
     fun tapTempo(nowMs: Long) {
@@ -977,21 +990,44 @@ class MetronomeController(
         val section = setlist.sections.getOrNull(s.activeSectionIndex) ?: return
         val elapsed = bar - sectionStartBar
         val reachedEnd = section.autoAdvance && section.bars > 0 && elapsed >= section.bars
-        if (!pendingAdvance && !reachedEnd) {
+        val nav = pendingSetNav
+        if (nav == PendingSetNav.NONE && !reachedEnd) {
             _state.update { it.copy(sectionBar = elapsed.coerceAtLeast(0)) }
             return
         }
-        pendingAdvance = false
-        val nextIndex = s.activeSectionIndex + 1
-        if (nextIndex > setlist.sections.lastIndex) {
-            if (setlist.loop && setlist.sections.isNotEmpty()) {
-                applySectionAt(setlist, 0, bar)
-            } else {
-                stop()
+        pendingSetNav = PendingSetNav.NONE
+        val targetIndex = when (nav) {
+            PendingSetNav.RESTART -> 0
+            PendingSetNav.PREVIOUS -> when {
+                s.activeSectionIndex > 0 -> s.activeSectionIndex - 1
+                setlist.loop && setlist.sections.isNotEmpty() -> setlist.sections.lastIndex
+                else -> 0
             }
-            return
+            PendingSetNav.NEXT, PendingSetNav.NONE -> {
+                val nextIndex = s.activeSectionIndex + 1
+                if (nextIndex <= setlist.sections.lastIndex) {
+                    nextIndex
+                } else if (setlist.loop && setlist.sections.isNotEmpty()) {
+                    0
+                } else {
+                    finishNonLoopingSet(setlist)
+                    return
+                }
+            }
         }
-        applySectionAt(setlist, nextIndex, bar)
+        applySectionAt(setlist, targetIndex, bar)
+    }
+
+    private fun finishNonLoopingSet(setlist: Setlist) {
+        stop()
+        applySectionAt(setlist, 0, barIndex)
+    }
+
+    private fun armLoadedSetFromTop() {
+        val s = _state.value
+        val setlist = s.setlists.firstOrNull { it.id == s.activeSetlistId } ?: return
+        if (setlist.sections.isEmpty()) return
+        applySectionAt(setlist, 0, barIndex)
     }
 
     private fun applySectionAt(setlist: Setlist, index: Int, bar: Int) {
