@@ -127,6 +127,7 @@ final class MetronomeBridge: ObservableObject {
     private let runner: IosEngineRunner
     private let themeStore: ColorThemeStore
     private let meterStore: CustomMeterStore
+    private let metromDatabase: MetromDatabase
     private var pollTimer: Timer?
     private var optionsLoaded = false
     private var interruptedWhilePlaying = false
@@ -142,6 +143,7 @@ final class MetronomeBridge: ObservableObject {
         let prefs = IosPrefsStore()
         themeStore = ColorThemeStore(prefs: prefs)
         meterStore = CustomMeterStore(prefs: prefs)
+        metromDatabase = MetromSqlDriverKt.openMetromDatabase(driver: MetromSqlDriverKt.createMetromSqlDriver())
         let assets = IosAssetIO()
         let cache = SampleToneCache(assets: assets)
         sink = AVAudioPcmSink()

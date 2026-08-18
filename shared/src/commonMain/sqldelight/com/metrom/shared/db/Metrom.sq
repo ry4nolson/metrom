@@ -1,0 +1,137 @@
+CREATE TABLE section (
+  id TEXT NOT NULL PRIMARY KEY,
+  name TEXT,
+  bars INTEGER NOT NULL,
+  bpm INTEGER NOT NULL,
+  beats INTEGER NOT NULL,
+  note_value INTEGER NOT NULL,
+  subdivision TEXT NOT NULL,
+  tone_id TEXT NOT NULL,
+  accent_note TEXT NOT NULL,
+  rest_note TEXT NOT NULL,
+  beat_accents TEXT NOT NULL,
+  swing TEXT NOT NULL,
+  group_tempo INTEGER NOT NULL,
+  count_in_bars INTEGER NOT NULL,
+  mute_play_bars INTEGER NOT NULL,
+  mute_silent_bars INTEGER NOT NULL
+);
+
+CREATE TABLE song (
+  id TEXT NOT NULL PRIMARY KEY,
+  name TEXT NOT NULL,
+  loop INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE setlist (
+  id TEXT NOT NULL PRIMARY KEY,
+  name TEXT NOT NULL,
+  loop INTEGER NOT NULL DEFAULT 0,
+  pause_between_ms INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE song_section (
+  song_id TEXT NOT NULL REFERENCES song(id) ON DELETE CASCADE,
+  section_id TEXT NOT NULL REFERENCES section(id) ON DELETE RESTRICT,
+  position INTEGER NOT NULL,
+  PRIMARY KEY (song_id, position)
+);
+
+CREATE TABLE setlist_song (
+  setlist_id TEXT NOT NULL REFERENCES setlist(id) ON DELETE CASCADE,
+  song_id TEXT NOT NULL REFERENCES song(id) ON DELETE RESTRICT,
+  position INTEGER NOT NULL,
+  PRIMARY KEY (setlist_id, position)
+);
+
+CREATE INDEX section_bpm ON section(bpm);
+CREATE INDEX section_meter ON section(beats, note_value);
+
+selectAllSections:
+SELECT * FROM section ORDER BY name ASC, id ASC;
+
+selectSectionById:
+SELECT * FROM section WHERE id = ?;
+
+insertSection:
+INSERT INTO section(
+  id, name, bars, bpm, beats, note_value, subdivision, tone_id,
+  accent_note, rest_note, beat_accents, swing, group_tempo,
+  count_in_bars, mute_play_bars, mute_silent_bars
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateSection:
+UPDATE section SET
+  name = ?,
+  bars = ?,
+  bpm = ?,
+  beats = ?,
+  note_value = ?,
+  subdivision = ?,
+  tone_id = ?,
+  accent_note = ?,
+  rest_note = ?,
+  beat_accents = ?,
+  swing = ?,
+  group_tempo = ?,
+  count_in_bars = ?,
+  mute_play_bars = ?,
+  mute_silent_bars = ?
+WHERE id = ?;
+
+deleteSectionById:
+DELETE FROM section WHERE id = ?;
+
+countSongsUsingSection:
+SELECT COUNT(*) FROM song_section WHERE section_id = ?;
+
+selectAllSongs:
+SELECT * FROM song ORDER BY name ASC, id ASC;
+
+selectSongById:
+SELECT * FROM song WHERE id = ?;
+
+insertSong:
+INSERT INTO song(id, name, loop) VALUES (?, ?, ?);
+
+updateSong:
+UPDATE song SET name = ?, loop = ? WHERE id = ?;
+
+deleteSongById:
+DELETE FROM song WHERE id = ?;
+
+countSetlistsUsingSong:
+SELECT COUNT(*) FROM setlist_song WHERE song_id = ?;
+
+clearSongSections:
+DELETE FROM song_section WHERE song_id = ?;
+
+insertSongSection:
+INSERT INTO song_section(song_id, section_id, position) VALUES (?, ?, ?);
+
+selectSectionIdsForSong:
+SELECT section_id FROM song_section WHERE song_id = ? ORDER BY position ASC;
+
+selectAllSetlists:
+SELECT * FROM setlist ORDER BY name ASC, id ASC;
+
+selectSetlistById:
+SELECT * FROM setlist WHERE id = ?;
+
+insertSetlist:
+INSERT INTO setlist(id, name, loop, pause_between_ms) VALUES (?, ?, ?, ?);
+
+updateSetlist:
+UPDATE setlist SET name = ?, loop = ?, pause_between_ms = ? WHERE id = ?;
+
+deleteSetlistById:
+DELETE FROM setlist WHERE id = ?;
+
+clearSetlistSongs:
+DELETE FROM setlist_song WHERE setlist_id = ?;
+
+insertSetlistSong:
+INSERT INTO setlist_song(setlist_id, song_id, position) VALUES (?, ?, ?);
+
+selectSongIdsForSetlist:
+SELECT song_id FROM setlist_song WHERE setlist_id = ? ORDER BY position ASC;

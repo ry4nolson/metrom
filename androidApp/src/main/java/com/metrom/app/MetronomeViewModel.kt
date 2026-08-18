@@ -102,6 +102,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     private val meterStore = CustomMeterStore(prefs)
     private val _customMeters = MutableStateFlow(meterStore.all())
     val customMeters: StateFlow<List<TimeSignature>> = _customMeters.asStateFlow()
+    private val metromDatabase = (application as MetromApplication).metromDatabase
 
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
         mainHandler.post {
