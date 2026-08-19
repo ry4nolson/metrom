@@ -392,6 +392,180 @@ class MetronomeControllerSetlistTest {
         sectionIds.forEach { id -> assertTrue(controller.state.value.sections.none { it.id == id }) }
     }
 
+    @Test
+    fun sectionScopedEditMutatesStandaloneSectionAndPersists() {
+        val h = harness()
+        h.controller.saveCurrentSection("Solo")
+        val id = h.controller.state.value.savedSections.single().id
+        h.controller.setSectionBpm(id, 142)
+        h.controller.setSectionBars(id, 7)
+        h.controller.setSectionLabel(id, "Verse")
+        val stored = SectionStore(h.database).get(id)!!
+        assertEquals(142, stored.bpm)
+        assertEquals(7, stored.bars)
+        assertEquals("Verse", stored.name)
+        val reloaded = makeController(h.prefs, h.database)
+        val section = reloaded.state.value.savedSections.single()
+        assertEquals(142, section.bpm)
+        assertEquals(7, section.bars)
+        assertEquals("Verse", section.name)
+    }
+
+    @Test
+    fun sectionScopedEditReappliesWhenLoadedStoppedNotWhilePlaying() {
+        val h = harness()
+        h.controller.saveCurrentSection("Live")
+        val section = h.controller.state.value.savedSections.single()
+        h.controller.loadSection(section)
+        h.controller.setSectionBpm(section.id, 144)
+        assertEquals(144, h.controller.state.value.bpm)
+        h.controller.start()
+        h.controller.setSectionBpm(section.id, 200)
+        assertEquals(144, h.controller.state.value.bpm)
+        assertTrue(h.controller.state.value.isPlaying)
+        assertEquals(200, SectionStore(h.database).get(section.id)?.bpm)
+    }
+
+    @Test
+    fun songCrudRoundTripsThroughStores() {
+        val h = harness()
+        val empty = h.controller.createSong("Empty")!!
+        assertTrue(empty.sectionRefs.isEmpty())
+        val live = h.controller.createSongFromCurrent("Live")!!
+        assertEquals(1, live.sectionIds.size)
+        h.controller.setBpm(88)
+        h.controller.addSectionToSong(live.id)
+        var song = h.controller.state.value.songs.first { it.id == live.id }
+        assertEquals(2, song.sectionIds.size)
+        h.controller.saveCurrentSection("Keep")
+        val keep = h.controller.state.value.savedSections.single()
+        h.controller.addExistingSectionToSong(live.id, keep.id)
+        song = h.controller.state.value.songs.first { it.id == live.id }
+        assertEquals(3, song.sectionIds.size)
+        assertEquals(keep.id, song.sectionIds.last())
+        h.controller.moveSongSection(live.id, 2, 0)
+        song = h.controller.state.value.songs.first { it.id == live.id }
+        assertEquals(keep.id, song.sectionIds.first())
+        h.controller.setSectionBars(song.sectionIds[1], 4)
+        h.controller.setSongSectionAutoAdvance(live.id, song.sectionIds[1], true)
+        h.controller.renameSong(live.id, "Renamed")
+        h.controller.setSongLoop(live.id, true)
+        h.controller.unlinkSectionFromSong(live.id, keep.id)
+        val stored = SongStore(h.database).get(live.id)!!
+        assertEquals("Renamed", stored.name)
+        assertTrue(stored.loop)
+        assertEquals(2, stored.sectionIds.size)
+        assertTrue(keep.id !in stored.sectionIds)
+        assertTrue(stored.sectionRefs[0].autoAdvance)
+        assertNotNull(SectionStore(h.database).get(keep.id))
+    }
+
+    @Test
+    fun loadSongAdvancesAutoSectionThenHoldsOpenEndedThenLoopsOrStops() {
+        val h = harness()
+        val sections = SectionStore(h.database)
+        val songs = SongStore(h.database)
+        sections.upsert(sampleLibrarySection("a", "A", 2, 90))
+        sections.upsert(sampleLibrarySection("b", "B", 0, 120))
+        songs.upsert(
+            Song(
+                id = "tune",
+                name = "Tune",
+                loop = false,
+                sectionRefs = listOf(
+                    SongSectionRef("a", autoAdvance = true),
+                    SongSectionRef("b", autoAdvance = false),
+                ),
+            ),
+        )
+        val controller = makeController(h.prefs, h.database)
+        controller.loadSong(controller.state.value.songs.single())
+        assertEquals("tune", controller.state.value.activeSongId)
+        assertEquals(0, controller.state.value.activeSectionIndex)
+        assertEquals(90, controller.state.value.bpm)
+        assertFalse(controller.state.value.isPlaying)
+
+        controller.start()
+        seedBar(controller)
+        advanceBars(controller, 2)
+        assertEquals(1, controller.state.value.activeSectionIndex)
+        assertEquals(120, controller.state.value.bpm)
+        advanceBars(controller, 8)
+        assertEquals(1, controller.state.value.activeSectionIndex)
+        assertTrue(controller.state.value.isPlaying)
+        controller.advanceSection()
+        advanceBars(controller, 1)
+        assertFalse(controller.state.value.isPlaying)
+        assertEquals(0, controller.state.value.activeSectionIndex)
+        assertEquals(90, controller.state.value.bpm)
+
+        val looping = makeController(h.prefs, h.database)
+        looping.setSectionBars("b", 2)
+        looping.setSongSectionAutoAdvance("tune", "b", true)
+        looping.setSongLoop("tune", true)
+        looping.loadSong(looping.state.value.songs.single())
+        looping.start()
+        seedBar(looping)
+        advanceBars(looping, 2)
+        assertEquals(1, looping.state.value.activeSectionIndex)
+        advanceBars(looping, 2)
+        assertTrue(looping.state.value.isPlaying)
+        assertEquals(0, looping.state.value.activeSectionIndex)
+        assertEquals(90, looping.state.value.bpm)
+    }
+
+    @Test
+    fun setlistOfTwoSongsAdvancesSectionThenSongThenLoopsOrStops() {
+        val h = harness()
+        val sections = SectionStore(h.database)
+        val songs = SongStore(h.database)
+        val setlists = SetlistStore(h.database)
+        sections.upsert(sampleLibrarySection("s1a", "A", 2, 90))
+        sections.upsert(sampleLibrarySection("s1b", "B", 2, 100))
+        sections.upsert(sampleLibrarySection("s2a", "C", 2, 110))
+        sections.upsert(sampleLibrarySection("s2b", "D", 2, 120))
+        songs.upsert(
+            Song(
+                id = "song-1",
+                name = "One",
+                sectionRefs = listOf(SongSectionRef("s1a", true), SongSectionRef("s1b", true)),
+            ),
+        )
+        songs.upsert(
+            Song(
+                id = "song-2",
+                name = "Two",
+                sectionRefs = listOf(SongSectionRef("s2a", true), SongSectionRef("s2b", true)),
+            ),
+        )
+        setlists.upsert(Setlist("set-x", "Gig", loop = false, songIds = listOf("song-1", "song-2")))
+        val controller = makeController(h.prefs, h.database)
+        controller.loadSetlist(controller.state.value.setlists.single())
+        controller.start()
+        seedBar(controller)
+        val bpms = mutableListOf(controller.state.value.bpm)
+        repeat(3) {
+            advanceBars(controller, 2)
+            bpms += controller.state.value.bpm
+        }
+        assertEquals(listOf(90, 100, 110, 120), bpms)
+        assertEquals(3, controller.state.value.activeSectionIndex)
+        advanceBars(controller, 2)
+        assertFalse(controller.state.value.isPlaying)
+        assertEquals(0, controller.state.value.activeSectionIndex)
+        assertEquals(90, controller.state.value.bpm)
+
+        setlists.upsert(Setlist("set-x", "Gig", loop = true, songIds = listOf("song-1", "song-2")))
+        val looping = makeController(h.prefs, h.database)
+        looping.loadSetlist(looping.state.value.setlists.single())
+        looping.start()
+        seedBar(looping)
+        repeat(4) { advanceBars(looping, 2) }
+        assertTrue(looping.state.value.isPlaying)
+        assertEquals(0, looping.state.value.activeSectionIndex)
+        assertEquals(90, looping.state.value.bpm)
+    }
+
     private fun sectionConfig(controller: MetronomeController, index: Int) =
         slots(controller)[index].section
 
@@ -406,10 +580,18 @@ class MetronomeControllerSetlistTest {
         specs.forEach { spec ->
             controller.addSectionFromCurrent(id)
             val added = slots(controller).last()
-            controller.updateSection(id, spec.toSection(added.section.id))
+            applySpec(controller, spec, added.section.id)
             controller.setSectionAutoAdvance(id, added.section.id, spec.autoAdvance)
         }
         controller.loadSetlist(controller.state.value.setlists.single())
+    }
+
+    private fun applySpec(controller: MetronomeController, spec: SlotSpec, sectionId: String) {
+        controller.setSectionLabel(sectionId, spec.name)
+        controller.setSectionBpm(sectionId, spec.bpm)
+        controller.setSectionTimeSignature(sectionId, spec.signature)
+        controller.setSectionSubdivision(sectionId, spec.subdivision)
+        controller.setSectionBars(sectionId, spec.bars)
     }
 
     private fun threeSectionSet(autoBars: Int = 0) = listOf(
