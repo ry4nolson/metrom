@@ -25,9 +25,11 @@ import com.metrom.shared.audio.SampleToneCache
 import com.metrom.shared.garmin.GarminProtocol
 import com.metrom.shared.library.Section
 import com.metrom.shared.library.Setlist
+import com.metrom.shared.library.Song
 import com.metrom.shared.detect.DetectDebug
 import com.metrom.shared.detect.DetectState
 import com.metrom.shared.domain.AccentNote
+import com.metrom.shared.domain.BeatAccent
 import com.metrom.shared.domain.MetronomeTone
 import com.metrom.shared.domain.MutePattern
 import com.metrom.shared.domain.Subdivision
@@ -42,6 +44,17 @@ import com.metrom.shared.theme.ColorThemeStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+
+sealed class EditorNav {
+    data object None : EditorNav()
+    data class SectionEditor(val sectionId: String, val origin: Origin) : EditorNav()
+    data class SongEditor(val songId: String) : EditorNav()
+
+    sealed class Origin {
+        data object Main : Origin()
+        data class Song(val songId: String) : Origin()
+    }
+}
 
 class MetronomeViewModel(application: Application) : AndroidViewModel(application) {
     private val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -93,6 +106,9 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     val state: StateFlow<MetronomeUiState> = controller.state
     val detectState: StateFlow<DetectState> = controller.detectState
     val detectDebug: StateFlow<DetectDebug?> = controller.detectDebug
+
+    private val _editorNav = MutableStateFlow<EditorNav>(EditorNav.None)
+    val editorNav: StateFlow<EditorNav> = _editorNav.asStateFlow()
 
     private val themeStore = ColorThemeStore(prefs)
     private val _theme = MutableStateFlow(themeStore.load())
@@ -249,6 +265,79 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     fun deleteSection(section: Section) { controller.deleteSection(section) }
     fun renameSection(section: Section, name: String) = controller.renameSection(section, name)
     fun updateActiveSection() = controller.updateActiveSection()
+
+    fun createSong(name: String) = controller.createSong(name)
+    fun createSongFromCurrent(name: String) = controller.createSongFromCurrent(name)
+    fun renameSong(songId: String, name: String) = controller.renameSong(songId, name)
+    fun setSongLoop(songId: String, enabled: Boolean) = controller.setSongLoop(songId, enabled)
+    fun addSectionToSong(songId: String) = controller.addSectionToSong(songId)
+    fun addExistingSectionToSong(songId: String, sectionId: String) =
+        controller.addExistingSectionToSong(songId, sectionId)
+    fun unlinkSectionFromSong(songId: String, sectionId: String) =
+        controller.unlinkSectionFromSong(songId, sectionId)
+    fun moveSongSection(songId: String, from: Int, to: Int) = controller.moveSongSection(songId, from, to)
+    fun setSongSectionAutoAdvance(songId: String, sectionId: String, autoAdvance: Boolean) =
+        controller.setSongSectionAutoAdvance(songId, sectionId, autoAdvance)
+    fun loadSong(song: Song) = controller.loadSong(song)
+    fun deleteSong(song: Song) { controller.deleteSong(song) }
+
+    fun setSectionBpm(sectionId: String, bpm: Int) = controller.setSectionBpm(sectionId, bpm)
+    fun setSectionTimeSignature(sectionId: String, signature: TimeSignature) =
+        controller.setSectionTimeSignature(sectionId, signature)
+    fun setSectionSubdivision(sectionId: String, subdivision: Subdivision) =
+        controller.setSectionSubdivision(sectionId, subdivision)
+    fun setSectionSwing(sectionId: String, swing: SwingFeel) = controller.setSectionSwing(sectionId, swing)
+    fun setSectionTone(sectionId: String, tone: MetronomeTone) = controller.setSectionTone(sectionId, tone)
+    fun setSectionAccentNote(sectionId: String, note: AccentNote) =
+        controller.setSectionAccentNote(sectionId, note)
+    fun setSectionRestNote(sectionId: String, note: AccentNote) =
+        controller.setSectionRestNote(sectionId, note)
+    fun setSectionBeatAccents(sectionId: String, levels: List<BeatAccent>) =
+        controller.setSectionBeatAccents(sectionId, levels)
+    fun setSectionGroupTempo(sectionId: String, enabled: Boolean) =
+        controller.setSectionGroupTempo(sectionId, enabled)
+    fun setSectionCountInBars(sectionId: String, bars: Int) = controller.setSectionCountInBars(sectionId, bars)
+    fun setSectionLabel(sectionId: String, label: String?) = controller.setSectionLabel(sectionId, label)
+    fun setSectionBars(sectionId: String, bars: Int) = controller.setSectionBars(sectionId, bars)
+    fun captureCurrentIntoSection(sectionId: String) = controller.captureCurrentIntoSection(sectionId)
+
+    fun cycleSectionBeatAccent(sectionId: String, index: Int) {
+        val section = state.value.sections.firstOrNull { it.id == sectionId } ?: return
+        if (index !in section.beatAccents.indices) return
+        val next = section.beatAccents.toMutableList().also { it[index] = it[index].next() }
+        controller.setSectionBeatAccents(sectionId, next)
+    }
+
+    fun resetSectionBeatAccents(sectionId: String) {
+        val section = state.value.sections.firstOrNull { it.id == sectionId } ?: return
+        controller.setSectionBeatAccents(
+            sectionId,
+            BeatAccent.defaultPattern(section.beats, section.noteValue),
+        )
+    }
+
+    fun openSectionEditor(sectionId: String, origin: EditorNav.Origin) {
+        _editorNav.value = EditorNav.SectionEditor(sectionId, origin)
+    }
+
+    fun openSongEditor(songId: String) {
+        _editorNav.value = EditorNav.SongEditor(songId)
+    }
+
+    fun closeEditor() {
+        _editorNav.value = EditorNav.None
+    }
+
+    fun editorBack() {
+        when (val nav = _editorNav.value) {
+            is EditorNav.SectionEditor -> when (val origin = nav.origin) {
+                EditorNav.Origin.Main -> _editorNav.value = EditorNav.None
+                is EditorNav.Origin.Song -> _editorNav.value = EditorNav.SongEditor(origin.songId)
+            }
+            is EditorNav.SongEditor, EditorNav.None -> _editorNav.value = EditorNav.None
+        }
+    }
+
     fun createSetlist(name: String) = controller.createSetlist(name)
     fun renameSetlist(id: String, name: String) = controller.renameSetlist(id, name)
     fun deleteSetlist(id: String) { controller.deleteSetlist(id) }

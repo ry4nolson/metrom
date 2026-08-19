@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.SystemClock
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -52,6 +53,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandLess
@@ -65,13 +67,18 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Vibration
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -102,6 +109,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import android.content.res.Configuration
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -110,16 +118,20 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.metrom.app.EditorNav
 import com.metrom.app.MetronomeViewModel
 import com.metrom.shared.library.Section
 import com.metrom.shared.library.Setlist
+import com.metrom.shared.library.Song
 import com.metrom.shared.practice.SetlistSlot
 import com.metrom.shared.detect.DetectDebug
 import com.metrom.shared.detect.DetectState
 import com.metrom.shared.detect.FailReason
 import com.metrom.shared.detect.OnsetEnvelope
+import com.metrom.shared.domain.AccentNote
 import com.metrom.shared.domain.BeatAccent
 import com.metrom.shared.domain.MetronomeLimits
+import com.metrom.shared.domain.MetronomeTone
 import com.metrom.shared.domain.MutePattern
 import com.metrom.shared.domain.SessionPhase
 import com.metrom.shared.domain.Subdivision
@@ -157,6 +169,7 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
     val colorTheme by viewModel.theme.collectAsStateWithLifecycle()
     val savedThemes by viewModel.savedThemes.collectAsStateWithLifecycle()
     val customMeters by viewModel.customMeters.collectAsStateWithLifecycle()
+    val editorNav by viewModel.editorNav.collectAsStateWithLifecycle()
     val isLandscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val horizontalPad = if (isLandscape) 20.dp else 24.dp
@@ -240,6 +253,32 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
                     openMeters = false
                 }
             )
+        }
+
+        AnimatedVisibility(
+            visible = editorNav !is EditorNav.None,
+            modifier = Modifier.fillMaxSize(),
+            enter = fadeIn() + slideInHorizontally { it },
+            exit = fadeOut() + slideOutHorizontally { it }
+        ) {
+            when (val nav = editorNav) {
+                is EditorNav.SectionEditor -> SectionEditorScreen(
+                    sectionId = nav.sectionId,
+                    state = state,
+                    viewModel = viewModel,
+                    onBack = viewModel::editorBack
+                )
+                is EditorNav.SongEditor -> SongEditorScreen(
+                    songId = nav.songId,
+                    state = state,
+                    viewModel = viewModel,
+                    onBack = viewModel::editorBack,
+                    onOpenSection = { sectionId ->
+                        viewModel.openSectionEditor(sectionId, EditorNav.Origin.Song(nav.songId))
+                    }
+                )
+                EditorNav.None -> Unit
+            }
         }
     }
 }
@@ -417,6 +456,14 @@ private fun SettingsColumn(
     ExpandablePanel(
         title = "SECTIONS",
         summary = if (state.savedSections.isEmpty()) "bookmark to save" else "${state.savedSections.size} saved",
+        initiallyExpanded = false
+    ) {
+        SectionsPanelBody(state, viewModel)
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    ExpandablePanel(
+        title = "SONGS",
+        summary = if (state.songs.isEmpty()) "build a song" else "${state.songs.size} saved",
         initiallyExpanded = false
     ) {
         SongsPanelBody(state, viewModel)
@@ -1940,14 +1987,24 @@ private fun PracticePanelBody(state: MetronomeUiState, viewModel: MetronomeViewM
 }
 
 @Composable
-private fun SongsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewModel) {
+private fun SectionsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewModel) {
     var renaming by remember { mutableStateOf<Section?>(null) }
     var renameText by remember { mutableStateOf("") }
+    var creating by remember { mutableStateOf(false) }
+    var createName by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        ChoiceChip(
+            label = "New section",
+            selected = false,
+            onClick = {
+                createName = Section.autoName(state.bpm, state.timeSignature, state.subdivision)
+                creating = true
+            }
+        )
         if (state.activeSavedSectionId != null) {
             ChoiceChip(
                 label = "Update active",
@@ -1963,10 +2020,11 @@ private fun SongsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewMode
             )
         } else {
             state.savedSections.forEach { section ->
-                SongRow(
-                    song = section,
+                SectionLibraryRow(
+                    section = section,
                     selected = state.activeSavedSectionId == section.id,
                     onLoad = { viewModel.loadSection(section) },
+                    onEdit = { viewModel.openSectionEditor(section.id, EditorNav.Origin.Main) },
                     onDelete = { viewModel.deleteSection(section) },
                     onRename = {
                         renaming = section
@@ -1977,51 +2035,39 @@ private fun SongsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewMode
         }
     }
 
+    if (creating) {
+        NameDialog(
+            title = "Save section",
+            value = createName,
+            onValueChange = { createName = it },
+            onConfirm = {
+                viewModel.saveCurrentSection(createName)
+                creating = false
+            },
+            onDismiss = { creating = false }
+        )
+    }
+
     renaming?.let { section ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { renaming = null },
-            title = {
-                Text("Rename section", color = Bone)
+        NameDialog(
+            title = "Rename section",
+            value = renameText,
+            onValueChange = { renameText = it },
+            onConfirm = {
+                viewModel.renameSection(section, renameText)
+                renaming = null
             },
-            text = {
-                androidx.compose.material3.OutlinedTextField(
-                    value = renameText,
-                    onValueChange = { renameText = it },
-                    singleLine = true,
-                    label = { Text("Name") }
-                )
-            },
-            confirmButton = {
-                Text(
-                    "SAVE",
-                    color = EmberSoft,
-                    modifier = Modifier
-                        .clickable {
-                            viewModel.renameSection(section, renameText)
-                            renaming = null
-                        }
-                        .padding(8.dp)
-                )
-            },
-            dismissButton = {
-                Text(
-                    "CANCEL",
-                    color = Ash,
-                    modifier = Modifier
-                        .clickable { renaming = null }
-                        .padding(8.dp)
-                )
-            },
-            containerColor = InkElevated
+            onDismiss = { renaming = null }
         )
     }
 }
 
 @Composable
-private fun SongRow(
-    song: Section,
+private fun SectionLibraryRow(
+    section: Section,
     selected: Boolean,
     onLoad: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
     onRename: () -> Unit
 ) {
@@ -2031,41 +2077,195 @@ private fun SongRow(
             .clip(RoundedCornerShape(12.dp))
             .background(if (selected) Ember.copy(alpha = 0.14f) else Color.Transparent)
             .border(1.dp, if (selected) Ember.copy(alpha = 0.55f) else InkLine, RoundedCornerShape(12.dp))
-            .pointerInput(song.id) {
-                detectTapGestures(
-                    onTap = { onLoad() },
-                    onLongPress = { onRename() }
-                )
-            }
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .pointerInput(section.id) {
+                    detectTapGestures(
+                        onTap = { onLoad() },
+                        onLongPress = { onRename() }
+                    )
+                }
+        ) {
             Text(
-                song.displayName(),
+                section.displayName(),
                 style = MaterialTheme.typography.titleLarge,
                 color = Bone,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                buildString {
-                    append("${song.bpm} · ${song.timeSignature.label} · ${song.subdivision.label}")
-                    if (song.swing != SwingFeel.OFF) append(" · ${song.swing.label}")
-                    if (song.groupTempo) append(" · dotted")
-                    if (song.mutePattern.silentBars > 0) append(" · mute ${song.mutePattern.label}")
-                    if (song.countInBars > 0) append(" · in ${song.countInBars}")
-                },
+                sectionSummary(section),
                 style = MaterialTheme.typography.labelMedium,
                 color = Ash,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
         }
+        IconButton(onClick = onEdit) {
+            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = Ash)
+        }
         IconButton(onClick = onDelete) {
             Icon(Icons.Filled.Close, contentDescription = "Delete", tint = Ash)
         }
     }
+}
+
+@Composable
+private fun SongsPanelBody(state: MetronomeUiState, viewModel: MetronomeViewModel) {
+    var creating by remember { mutableStateOf(false) }
+    var fromCurrent by remember { mutableStateOf(false) }
+    var createName by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        ChoiceChip(
+            label = "New song",
+            selected = false,
+            onClick = {
+                createName = "Song ${state.songs.size + 1}"
+                fromCurrent = false
+                creating = true
+            }
+        )
+        ChoiceChip(
+            label = "New song from current",
+            selected = false,
+            onClick = {
+                createName = Section.autoName(state.bpm, state.timeSignature, state.subdivision)
+                fromCurrent = true
+                creating = true
+            }
+        )
+        if (state.songs.isEmpty()) {
+            Text(
+                "A song is an ordered list of sections. Tap to load, edit to arrange.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Ash
+            )
+        } else {
+            state.songs.forEach { song ->
+                SongLibraryRow(
+                    song = song,
+                    selected = state.activeSongId == song.id,
+                    onLoad = { viewModel.loadSong(song) },
+                    onEdit = { viewModel.openSongEditor(song.id) },
+                    onDelete = { viewModel.deleteSong(song) }
+                )
+            }
+        }
+    }
+
+    if (creating) {
+        NameDialog(
+            title = if (fromCurrent) "New song from current" else "New song",
+            value = createName,
+            onValueChange = { createName = it },
+            onConfirm = {
+                if (fromCurrent) viewModel.createSongFromCurrent(createName)
+                else viewModel.createSong(createName)
+                creating = false
+            },
+            onDismiss = { creating = false }
+        )
+    }
+}
+
+@Composable
+private fun SongLibraryRow(
+    song: Song,
+    selected: Boolean,
+    onLoad: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val count = song.sectionRefs.size
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) Ember.copy(alpha = 0.14f) else Color.Transparent)
+            .border(1.dp, if (selected) Ember.copy(alpha = 0.55f) else InkLine, RoundedCornerShape(12.dp))
+            .clickable(onClick = onLoad)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                song.name,
+                style = MaterialTheme.typography.titleLarge,
+                color = Bone,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                if (count == 1) "1 section" else "$count sections",
+                style = MaterialTheme.typography.labelMedium,
+                color = Ash
+            )
+        }
+        IconButton(onClick = onEdit) {
+            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = Ash)
+        }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Filled.Close, contentDescription = "Delete", tint = Ash)
+        }
+    }
+}
+
+@Composable
+private fun NameDialog(
+    title: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, color = Bone) },
+        text = {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                label = { Text("Name") }
+            )
+        },
+        confirmButton = {
+            Text(
+                "SAVE",
+                color = EmberSoft,
+                modifier = Modifier
+                    .clickable(onClick = onConfirm)
+                    .padding(8.dp)
+            )
+        },
+        dismissButton = {
+            Text(
+                "CANCEL",
+                color = Ash,
+                modifier = Modifier
+                    .clickable(onClick = onDismiss)
+                    .padding(8.dp)
+            )
+        },
+        containerColor = InkElevated
+    )
+}
+
+private fun sectionSummary(section: Section): String = buildString {
+    append("${section.bpm} · ${section.timeSignature.label} · ${section.subdivision.label}")
+    append(if (section.bars <= 0) " · Open" else " · ${section.bars} bars")
+    if (section.swing != SwingFeel.OFF) append(" · ${section.swing.label}")
+    if (section.groupTempo) append(" · dotted")
+    if (section.mutePattern.silentBars > 0) append(" · mute ${section.mutePattern.label}")
+    if (section.countInBars > 0) append(" · in ${section.countInBars}")
 }
 
 @Composable
@@ -2659,6 +2859,530 @@ private fun RoundIconButton(onClick: () -> Unit, content: @Composable () -> Unit
         contentAlignment = Alignment.Center
     ) {
         content()
+    }
+}
+
+@Composable
+private fun SectionEditorScreen(
+    sectionId: String,
+    state: MetronomeUiState,
+    viewModel: MetronomeViewModel,
+    onBack: () -> Unit
+) {
+    val section = state.sections.firstOrNull { it.id == sectionId }
+    if (section == null) {
+        LaunchedEffect(sectionId) { onBack() }
+        return
+    }
+    val customMeters by viewModel.customMeters.collectAsStateWithLifecycle()
+    val tone = state.toneOptions.firstOrNull { it.id == section.toneId }
+        ?: MetronomeTone.fromId(section.toneId)
+        ?: MetronomeTone.DEFAULT
+    val accentsCustomized = !BeatAccent.isDefault(section.beatAccents, section.beats, section.noteValue)
+
+    BackHandler(onBack = onBack)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(BackgroundTop, Ink, BackgroundBottom)
+                )
+            )
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+                .padding(top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Bone
+                )
+            }
+            OutlinedTextField(
+                value = section.name.orEmpty(),
+                onValueChange = { viewModel.setSectionLabel(sectionId, it) },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                label = { Text("Name") },
+                placeholder = { Text(section.displayName()) }
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(top = 12.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            ChoiceChip(
+                label = "Grab current",
+                selected = false,
+                onClick = { viewModel.captureCurrentIntoSection(sectionId) }
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                RoundIconButton(onClick = {
+                    viewModel.setSectionBpm(sectionId, section.bpm - 1)
+                }) {
+                    Icon(Icons.Filled.Remove, contentDescription = "Slower", tint = Mist)
+                }
+                Text(
+                    text = section.bpm.toString(),
+                    style = MaterialTheme.typography.displayMedium,
+                    color = Bone,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+                RoundIconButton(onClick = {
+                    viewModel.setSectionBpm(sectionId, section.bpm + 1)
+                }) {
+                    Icon(Icons.Filled.Add, contentDescription = "Faster", tint = Mist)
+                }
+            }
+
+            TempoPresets(section.bpm) { bpm -> viewModel.setSectionBpm(sectionId, bpm) }
+
+            LabeledChipRow(label = "BARS") {
+                RoundIconButton(onClick = {
+                    viewModel.setSectionBars(sectionId, (section.bars - 1).coerceAtLeast(0))
+                }) {
+                    Icon(Icons.Filled.Remove, contentDescription = "Fewer bars", tint = Mist)
+                }
+                OutlinedTextField(
+                    value = if (section.bars <= 0) "Open" else section.bars.toString(),
+                    onValueChange = { raw ->
+                        val digits = raw.filter { it.isDigit() }.take(3)
+                        viewModel.setSectionBars(sectionId, digits.toIntOrNull() ?: 0)
+                    },
+                    modifier = Modifier.width(120.dp),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    label = { Text("Bars") }
+                )
+                RoundIconButton(onClick = {
+                    viewModel.setSectionBars(sectionId, (section.bars + 1).coerceAtMost(999))
+                }) {
+                    Icon(Icons.Filled.Add, contentDescription = "More bars", tint = Mist)
+                }
+            }
+
+            LabeledChipRow(label = "METER") {
+                TimeSignature.COMMON.forEach { sig ->
+                    ChoiceChip(
+                        label = sig.label,
+                        selected = section.timeSignature == sig,
+                        onClick = { viewModel.setSectionTimeSignature(sectionId, sig) }
+                    )
+                }
+                customMeters.forEach { sig ->
+                    ChoiceChip(
+                        label = sig.label,
+                        selected = section.timeSignature == sig,
+                        onClick = { viewModel.setSectionTimeSignature(sectionId, sig) }
+                    )
+                }
+                if (accentsCustomized) {
+                    ChoiceChip(
+                        label = "Reset accents",
+                        selected = false,
+                        onClick = { viewModel.resetSectionBeatAccents(sectionId) }
+                    )
+                }
+            }
+
+            SectionBeatRail(
+                beats = section.beats,
+                levels = section.beatAccents,
+                onCycle = { index -> viewModel.cycleSectionBeatAccent(sectionId, index) },
+                onReset = { viewModel.resetSectionBeatAccents(sectionId) }
+            )
+
+            LabeledChipRow(label = "GRID") {
+                Subdivision.entries.forEach { sub ->
+                    ChoiceChip(
+                        label = sub.label,
+                        selected = section.subdivision == sub,
+                        onClick = { viewModel.setSectionSubdivision(sectionId, sub) }
+                    )
+                }
+            }
+
+            if (section.subdivision == Subdivision.EIGHTH || section.subdivision == Subdivision.SIXTEENTH) {
+                LabeledChipRow(label = "SWING") {
+                    SwingFeel.entries.forEach { feel ->
+                        ChoiceChip(
+                            label = feel.label,
+                            selected = section.swing == feel,
+                            onClick = { viewModel.setSectionSwing(sectionId, feel) }
+                        )
+                    }
+                }
+            }
+
+            if (section.timeSignature.isCompound) {
+                LabeledChipRow(label = "BPM MEANS") {
+                    ChoiceChip(
+                        label = "Each pulse",
+                        selected = !section.groupTempo,
+                        onClick = { viewModel.setSectionGroupTempo(sectionId, false) }
+                    )
+                    ChoiceChip(
+                        label = "Dotted beat",
+                        selected = section.groupTempo,
+                        onClick = { viewModel.setSectionGroupTempo(sectionId, true) }
+                    )
+                }
+            }
+
+            LabeledChipRow(label = "CLICK") {
+                state.toneOptions.forEach { option ->
+                    ChoiceChip(
+                        label = option.label,
+                        selected = tone.id == option.id,
+                        onClick = { viewModel.setSectionTone(sectionId, option) }
+                    )
+                }
+            }
+            if (tone.supportsPitchAccent) {
+                LabeledChipRow(label = "ONE") {
+                    AccentNote.entries.forEach { note ->
+                        ChoiceChip(
+                            label = note.label,
+                            selected = section.accentNote == note,
+                            onClick = { viewModel.setSectionAccentNote(sectionId, note) }
+                        )
+                    }
+                }
+                LabeledChipRow(label = "OTHERS") {
+                    AccentNote.entries.forEach { note ->
+                        ChoiceChip(
+                            label = note.label,
+                            selected = section.restNote == note,
+                            onClick = { viewModel.setSectionRestNote(sectionId, note) }
+                        )
+                    }
+                }
+            }
+
+            LabeledChipRow(label = "COUNT IN") {
+                listOf(0, 1, 2, 4).forEach { bars ->
+                    ChoiceChip(
+                        label = if (bars == 0) "Off" else "${bars} bar",
+                        selected = section.countInBars == bars,
+                        onClick = { viewModel.setSectionCountInBars(sectionId, bars) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionBeatRail(
+    beats: Int,
+    levels: List<BeatAccent>,
+    onCycle: (Int) -> Unit,
+    onReset: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .pointerInput(Unit) {
+                detectTapGestures(onLongPress = { onReset() })
+            },
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        repeat(beats) { index ->
+            val level = levels.getOrElse(index) {
+                if (index == 0) BeatAccent.STRONG else BeatAccent.NORMAL
+            }
+            val barHeight = when (level) {
+                BeatAccent.STRONG -> 14.dp
+                BeatAccent.NORMAL -> 8.dp
+                BeatAccent.MUTE -> 4.dp
+            }
+            val color = when (level) {
+                BeatAccent.STRONG -> InkLine.copy(alpha = 0.95f)
+                BeatAccent.MUTE -> InkLine.copy(alpha = 0.22f)
+                else -> InkLine.copy(alpha = 0.5f)
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable { onCycle(index) }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(barHeight)
+                        .clip(RoundedCornerShape(99.dp))
+                        .then(
+                            if (level == BeatAccent.MUTE) {
+                                Modifier.border(1.dp, Ash.copy(alpha = 0.45f), RoundedCornerShape(99.dp))
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .background(color)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = (index + 1).toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = when (level) {
+                        BeatAccent.STRONG -> Mist
+                        BeatAccent.MUTE -> Ash.copy(alpha = 0.55f)
+                        else -> Ash
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SongEditorScreen(
+    songId: String,
+    state: MetronomeUiState,
+    viewModel: MetronomeViewModel,
+    onBack: () -> Unit,
+    onOpenSection: (String) -> Unit
+) {
+    val song = state.songs.firstOrNull { it.id == songId }
+    if (song == null) {
+        LaunchedEffect(songId) { onBack() }
+        return
+    }
+    var pickingSaved by remember { mutableStateOf(false) }
+
+    BackHandler(onBack = onBack)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(BackgroundTop, Ink, BackgroundBottom)
+                )
+            )
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+                .padding(top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Bone
+                )
+            }
+            OutlinedTextField(
+                value = song.name,
+                onValueChange = { viewModel.renameSong(songId, it) },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                label = { Text("Song") }
+            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Text("Loop", style = MaterialTheme.typography.labelMedium, color = Ash)
+                Switch(
+                    checked = song.loop,
+                    onCheckedChange = { viewModel.setSongLoop(songId, it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Ink,
+                        checkedTrackColor = Ember,
+                        uncheckedThumbColor = Mist,
+                        uncheckedTrackColor = InkLine,
+                        uncheckedBorderColor = InkLine
+                    )
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(top = 12.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ChoiceChip(
+                label = "Add current as section",
+                selected = false,
+                onClick = { viewModel.addSectionToSong(songId) }
+            )
+            ChoiceChip(
+                label = "Add saved section",
+                selected = false,
+                onClick = { pickingSaved = true }
+            )
+
+            if (song.sectionRefs.isEmpty()) {
+                Text(
+                    "Add sections to build the song order.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Ash
+                )
+            } else {
+                song.sectionRefs.forEachIndexed { index, ref ->
+                    val section = state.sections.firstOrNull { it.id == ref.sectionId }
+                    SongSectionEditorRow(
+                        section = section,
+                        autoAdvance = ref.autoAdvance,
+                        isFirst = index == 0,
+                        isLast = index == song.sectionRefs.lastIndex,
+                        onOpen = { onOpenSection(ref.sectionId) },
+                        onMoveUp = { viewModel.moveSongSection(songId, index, index - 1) },
+                        onMoveDown = { viewModel.moveSongSection(songId, index, index + 1) },
+                        onUnlink = { viewModel.unlinkSectionFromSong(songId, ref.sectionId) },
+                        onToggleAuto = {
+                            viewModel.setSongSectionAutoAdvance(songId, ref.sectionId, !ref.autoAdvance)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    if (pickingSaved) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pickingSaved = false },
+            title = { Text("Add saved section", color = Bone) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (state.savedSections.isEmpty()) {
+                        Text("No saved sections.", color = Ash)
+                    } else {
+                        state.savedSections.forEach { saved ->
+                            ChoiceChip(
+                                label = saved.displayName(),
+                                selected = false,
+                                onClick = {
+                                    viewModel.addExistingSectionToSong(songId, saved.id)
+                                    pickingSaved = false
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Text(
+                    "CANCEL",
+                    color = Ash,
+                    modifier = Modifier
+                        .clickable { pickingSaved = false }
+                        .padding(8.dp)
+                )
+            },
+            containerColor = InkElevated
+        )
+    }
+}
+
+@Composable
+private fun SongSectionEditorRow(
+    section: Section?,
+    autoAdvance: Boolean,
+    isFirst: Boolean,
+    isLast: Boolean,
+    onOpen: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onUnlink: () -> Unit,
+    onToggleAuto: () -> Unit
+) {
+    val bars = section?.bars ?: 0
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.Transparent)
+            .border(1.dp, InkLine, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = onOpen)
+            ) {
+                Text(
+                    section?.displayName() ?: "Missing section",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Bone,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    if (section != null) sectionSummary(section) else "unresolved",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Ash,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            IconButton(onClick = onMoveUp, enabled = !isFirst) {
+                Icon(
+                    Icons.Filled.ExpandLess,
+                    contentDescription = "Move up",
+                    tint = if (isFirst) InkLine else Ash
+                )
+            }
+            IconButton(onClick = onMoveDown, enabled = !isLast) {
+                Icon(
+                    Icons.Filled.ExpandMore,
+                    contentDescription = "Move down",
+                    tint = if (isLast) InkLine else Ash
+                )
+            }
+            IconButton(onClick = onUnlink) {
+                Icon(Icons.Filled.Close, contentDescription = "Remove", tint = Ash)
+            }
+        }
+        if (bars > 0) {
+            ChoiceChip(
+                label = "Auto",
+                selected = autoAdvance,
+                onClick = onToggleAuto
+            )
+        }
     }
 }
 
