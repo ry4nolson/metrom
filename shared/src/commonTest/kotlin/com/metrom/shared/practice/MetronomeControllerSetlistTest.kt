@@ -412,6 +412,25 @@ class MetronomeControllerSetlistTest {
     }
 
     @Test
+    fun saveCurrentSectionAllowsSameConfigDuplicatesAndKeepsPlacedSectionsVisible() {
+        val h = harness()
+        h.controller.saveCurrentSection("First")
+        h.controller.saveCurrentSection("Second")
+        val song = h.controller.createSongFromCurrent("S")!!
+        h.controller.addExistingSectionToSong(
+            song.id,
+            h.controller.state.value.sections.first { it.name == "First" }.id,
+        )
+        val sections = h.controller.state.value.sections
+        val saved = h.controller.state.value.savedSections
+        assertEquals(3, sections.size)
+        assertEquals(sections.map { it.id }, saved.map { it.id })
+        assertTrue(sections.any { it.name == "First" })
+        assertTrue(sections.any { it.name == "Second" })
+        assertEquals(sections.first { it.name == "First" }.bpm, sections.first { it.name == "Second" }.bpm)
+    }
+
+    @Test
     fun sectionScopedEditReappliesWhenLoadedStoppedNotWhilePlaying() {
         val h = harness()
         h.controller.saveCurrentSection("Live")
@@ -438,7 +457,7 @@ class MetronomeControllerSetlistTest {
         var song = h.controller.state.value.songs.first { it.id == live.id }
         assertEquals(2, song.sectionIds.size)
         h.controller.saveCurrentSection("Keep")
-        val keep = h.controller.state.value.savedSections.single()
+        val keep = h.controller.state.value.sections.first { it.name == "Keep" }
         h.controller.addExistingSectionToSong(live.id, keep.id)
         song = h.controller.state.value.songs.first { it.id == live.id }
         assertEquals(3, song.sectionIds.size)

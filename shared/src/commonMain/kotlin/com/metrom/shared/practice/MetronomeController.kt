@@ -533,16 +533,6 @@ class MetronomeController(
 
     fun saveCurrentSection(name: String? = null) {
         val s = _state.value
-        val existing = s.savedSections.firstOrNull {
-            it.sameSetupAs(
-                s.bpm, s.timeSignature, s.subdivision, s.tone.id, s.accentNote, s.restNote,
-                s.beatAccents, s.swing, s.groupTempo, s.countInBars, s.mutePattern,
-            )
-        }
-        if (existing != null) {
-            _state.update { it.copy(activeSavedSectionId = existing.id, tapHint = "ALREADY SAVED") }
-            return
-        }
         val resolvedName = name?.trim().orEmpty().ifEmpty {
             Section.autoName(s.bpm, s.timeSignature, s.subdivision)
         }
@@ -1288,7 +1278,7 @@ class MetronomeController(
             trainerAutoStop = prefs.getBoolean("trainerAutoStop", true),
             songs = songs,
             sections = sections,
-            savedSections = sections.savedOnly(songs).dedupeSections(),
+            savedSections = sections,
             setlists = library.loadSetlists(),
         )
     }
@@ -1427,7 +1417,7 @@ class MetronomeController(
                 it.copy(
                     songs = songs,
                     sections = sections,
-                    savedSections = sections.savedOnly(songs).dedupeSections(),
+                    savedSections = sections,
                     setlists = library.loadSetlists(),
                 ),
             )
@@ -1467,20 +1457,3 @@ class MetronomeController(
     }
 }
 
-private fun List<Section>.savedOnly(songs: List<Song>): List<Section> {
-    val used = songs.flatMap { it.sectionIds }.toSet()
-    return filter { it.id !in used }
-}
-
-private fun List<Section>.dedupeSections(): List<Section> {
-    val seen = LinkedHashSet<String>()
-    return filter { section ->
-        val key = listOf(
-            section.bpm, section.beats, section.noteValue,
-            section.subdivision.ordinal, section.toneId, section.accentNote.ordinal, section.restNote.ordinal,
-            BeatAccent.encode(section.beatAccents), section.swing.ordinal, section.groupTempo,
-            section.countInBars, section.mutePlayBars, section.muteSilentBars,
-        ).joinToString("|")
-        seen.add(key)
-    }
-}

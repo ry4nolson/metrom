@@ -51,7 +51,7 @@ sealed class EditorNav {
     data class SongEditor(val songId: String) : EditorNav()
 
     sealed class Origin {
-        data object Main : Origin()
+        data object Library : Origin()
         data class Song(val songId: String) : Origin()
     }
 }
@@ -331,12 +331,15 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     fun editorBack() {
         when (val nav = _editorNav.value) {
             is EditorNav.SectionEditor -> when (val origin = nav.origin) {
-                EditorNav.Origin.Main -> _editorNav.value = EditorNav.None
+                EditorNav.Origin.Library -> _editorNav.value = EditorNav.None
                 is EditorNav.Origin.Song -> _editorNav.value = EditorNav.SongEditor(origin.songId)
             }
             is EditorNav.SongEditor, EditorNav.None -> _editorNav.value = EditorNav.None
         }
     }
+
+    fun previousSection() = controller.previousSection()
+    fun restartSet() = controller.restartSet()
 
     fun createSetlist(name: String) = controller.createSetlist(name)
     fun renameSetlist(id: String, name: String) = controller.renameSetlist(id, name)
