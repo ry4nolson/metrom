@@ -2857,7 +2857,7 @@ private fun SongSectionEditorRow(
         }
         if (bars > 0) {
             ChoiceChip(
-                label = "Auto",
+                label = if (autoAdvance) "Auto" else "Manual",
                 selected = autoAdvance,
                 onClick = onToggleAuto
             )

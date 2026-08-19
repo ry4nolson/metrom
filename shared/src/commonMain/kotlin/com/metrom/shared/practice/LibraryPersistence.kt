@@ -69,7 +69,7 @@ internal class LibraryPersistence(private val db: MetromDatabase) {
         songs.upsert(current.copy(loop = loop))
     }
 
-    fun addSectionToSong(songId: String, section: Section, autoAdvance: Boolean = false): Section? {
+    fun addSectionToSong(songId: String, section: Section, autoAdvance: Boolean = section.bars > 0): Section? {
         val song = songs.get(songId) ?: return null
         sections.upsert(section)
         songs.upsert(song.copy(sectionRefs = song.sectionRefs + SongSectionRef(section.id, autoAdvance)))
@@ -78,8 +78,15 @@ internal class LibraryPersistence(private val db: MetromDatabase) {
 
     fun addExistingSectionToSong(songId: String, sectionId: String): Boolean {
         val song = songs.get(songId) ?: return false
-        if (sections.get(sectionId) == null) return false
-        songs.upsert(song.copy(sectionRefs = song.sectionRefs + SongSectionRef(sectionId)))
+        val section = sections.get(sectionId) ?: return false
+        songs.upsert(
+            song.copy(
+                sectionRefs = song.sectionRefs + SongSectionRef(
+                    sectionId,
+                    autoAdvance = section.bars > 0,
+                ),
+            ),
+        )
         return true
     }
 
@@ -126,12 +133,20 @@ internal class LibraryPersistence(private val db: MetromDatabase) {
     }
 
     fun clearAutoAdvanceForSection(sectionId: String) {
+        setAutoAdvanceForSection(sectionId, enabled = false)
+    }
+
+    fun enableAutoAdvanceForSection(sectionId: String) {
+        setAutoAdvanceForSection(sectionId, enabled = true)
+    }
+
+    private fun setAutoAdvanceForSection(sectionId: String, enabled: Boolean) {
         songs.list().forEach { song ->
             if (song.sectionIds.none { it == sectionId }) return@forEach
             songs.upsert(
                 song.copy(
                     sectionRefs = song.sectionRefs.map {
-                        if (it.sectionId == sectionId) it.copy(autoAdvance = false) else it
+                        if (it.sectionId == sectionId) it.copy(autoAdvance = enabled) else it
                     },
                 ),
             )

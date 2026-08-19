@@ -556,6 +556,38 @@ class MetronomeControllerSetlistTest {
     }
 
     @Test
+    fun addingTimedSavedSectionDefaultsAutoAndAdvancesTwoFourIntro() {
+        val h = harness()
+        h.controller.setBpm(120)
+        h.controller.setTimeSignature(TimeSignature(2, 4))
+        h.controller.saveCurrentSection("intro")
+        val introId = h.controller.state.value.sections.single { it.name == "intro" }.id
+        h.controller.setSectionBars(introId, 2)
+        h.controller.setBpm(130)
+        h.controller.setTimeSignature(TimeSignature(4, 4))
+        h.controller.saveCurrentSection("verse")
+        val verseId = h.controller.state.value.sections.single { it.name == "verse" }.id
+        h.controller.setSectionBars(verseId, 2)
+        val song = h.controller.createSong("test song")!!
+        h.controller.addExistingSectionToSong(song.id, introId)
+        h.controller.addExistingSectionToSong(song.id, verseId)
+        val slots = h.controller.state.value.songSlots(
+            h.controller.state.value.songs.first { it.id == song.id },
+        )
+        assertEquals(listOf(true, true), slots.map { it.autoAdvance })
+        assertEquals(listOf(2, 2), slots.map { it.section.bars })
+
+        h.controller.loadSong(h.controller.state.value.songs.first { it.id == song.id })
+        h.controller.start()
+        seedBar(h.controller, beatsPerBar = 2)
+        assertEquals(0, h.controller.state.value.activeSectionIndex)
+        assertEquals(120, h.controller.state.value.bpm)
+        advanceBars(h.controller, 2, beatsPerBar = 2)
+        assertEquals(1, h.controller.state.value.activeSectionIndex)
+        assertEquals(130, h.controller.state.value.bpm)
+    }
+
+    @Test
     fun reusedSectionRespectsPerPlacementAutoAdvance() {
         val h = harness()
         h.controller.saveCurrentSection("Verse")

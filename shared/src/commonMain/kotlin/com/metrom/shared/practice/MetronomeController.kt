@@ -804,10 +804,14 @@ class MetronomeController(
     }
 
     fun setSectionBars(sectionId: String, bars: Int) {
+        val previous = library.getSection(sectionId)?.bars ?: 0
         val clamped = bars.coerceIn(0, SECTION_BARS_MAX)
         mutateSection(sectionId) { it.copy(bars = clamped) }
         if (clamped == 0) {
             library.clearAutoAdvanceForSection(sectionId)
+            reloadLibrary()
+        } else if (previous <= 0 && clamped > 0) {
+            library.enableAutoAdvanceForSection(sectionId)
             reloadLibrary()
         }
     }
