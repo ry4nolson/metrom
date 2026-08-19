@@ -15,13 +15,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,7 +54,6 @@ import com.metrom.shared.library.Section
 import com.metrom.shared.library.Setlist
 import com.metrom.shared.library.Song
 import com.metrom.shared.practice.MetronomeUiState
-import com.metrom.shared.practice.SetlistSlot
 
 enum class LibraryTab { Sections, Songs, Setlists }
 
@@ -313,12 +309,10 @@ private fun SetlistsTab(
     viewModel: MetronomeViewModel,
     onArmAndBounce: () -> Unit,
 ) {
-    var editingId by rememberSaveable { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
     var createName by remember { mutableStateOf("") }
     var renaming by remember { mutableStateOf<Setlist?>(null) }
     var renameText by remember { mutableStateOf("") }
-    val editing = state.setlists.firstOrNull { it.id == editingId }
 
     Column(
         modifier = Modifier
@@ -327,98 +321,43 @@ private fun SetlistsTab(
             .padding(bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        if (editing != null) {
-            ChoiceChip(
-                label = "All setlists",
-                selected = false,
-                onClick = { editingId = null }
-            )
-            Text(
-                editing.name,
-                style = MaterialTheme.typography.titleLarge,
-                color = Bone,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            ChoiceChip(
-                label = "Add current as section",
-                selected = false,
-                onClick = { viewModel.addSectionFromCurrent(editing.id) }
-            )
-            val slots = state.setlistSlots(editing)
-            if (slots.isEmpty()) {
-                Text(
-                    "Add the current tempo, meter, and tone as a section. Open-ended until you set a bar count.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Ash
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    itemsIndexed(slots, key = { index, slot -> "${index}-${slot.section.id}" }) { index, slot ->
-                        SectionEditorRow(
-                            section = slot,
-                            selected = state.inSetMode &&
-                                state.activeSetlistId == editing.id &&
-                                state.activeSectionIndex == index,
-                            isFirst = index == 0,
-                            isLast = index == slots.lastIndex,
-                            onBars = { bars ->
-                                viewModel.setSectionBars(editing.id, slot.section.id, bars)
-                            },
-                            onToggleAuto = {
-                                viewModel.setSectionAutoAdvance(editing.id, slot.section.id, !slot.autoAdvance)
-                            },
-                            onMoveUp = { viewModel.moveSection(editing.id, index, index - 1) },
-                            onMoveDown = { viewModel.moveSection(editing.id, index, index + 1) },
-                            onRemove = { viewModel.removeSection(editing.id, slot.section.id) }
-                        )
-                    }
-                }
+        ChoiceChip(
+            label = "New setlist",
+            selected = false,
+            onClick = {
+                createName = "Set ${state.setlists.size + 1}"
+                creating = true
             }
-        } else {
-            ChoiceChip(
-                label = "New setlist",
-                selected = false,
-                onClick = {
-                    createName = "Set ${state.setlists.size + 1}"
-                    creating = true
-                }
+        )
+        if (state.setlists.isEmpty()) {
+            Text(
+                "Save an ordered set of songs. Tap to load, long-press to rename.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Ash
             )
-            if (state.setlists.isEmpty()) {
-                Text(
-                    "Save an ordered set of songs. Tap to load, long-press to rename.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Ash
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(state.setlists, key = { it.id }) { setlist ->
-                        SetlistRow(
-                            setlist = setlist,
-                            slotCount = state.setlistSlots(setlist).size,
-                            selected = state.activeSetlistId == setlist.id,
-                            onLoad = {
-                                viewModel.loadSetlist(setlist)
-                                onArmAndBounce()
-                            },
-                            onEdit = { editingId = setlist.id },
-                            onDelete = { viewModel.deleteSetlist(setlist.id) },
-                            onRename = {
-                                renaming = setlist
-                                renameText = setlist.name
-                            }
-                        )
-                    }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(state.setlists, key = { it.id }) { setlist ->
+                    SetlistRow(
+                        setlist = setlist,
+                        slotCount = state.setlistSlots(setlist).size,
+                        selected = state.activeSetlistId == setlist.id,
+                        onLoad = {
+                            viewModel.loadSetlist(setlist)
+                            onArmAndBounce()
+                        },
+                        onEdit = { },
+                        onDelete = { viewModel.deleteSetlist(setlist.id) },
+                        onRename = {
+                            renaming = setlist
+                            renameText = setlist.name
+                        }
+                    )
                 }
             }
         }
@@ -600,88 +539,6 @@ private fun SetlistRow(
             Icon(Icons.Filled.Close, contentDescription = "Delete", tint = Ash)
         }
     }
-}
-
-@Composable
-private fun SectionEditorRow(
-    section: SetlistSlot,
-    selected: Boolean,
-    isFirst: Boolean,
-    isLast: Boolean,
-    onBars: (Int) -> Unit,
-    onToggleAuto: () -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onRemove: () -> Unit
-) {
-    val barOptions = listOf(0, 2, 4, 8, 16, 32)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) Ember.copy(alpha = 0.14f) else Color.Transparent)
-            .border(1.dp, if (selected) Ember.copy(alpha = 0.55f) else InkLine, RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    section.section.displayName(),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Bone,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    sectionLengthLabel(section),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Ash,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            IconButton(onClick = onMoveUp, enabled = !isFirst) {
-                Icon(
-                    Icons.Filled.ExpandLess,
-                    contentDescription = "Move up",
-                    tint = if (isFirst) InkLine else Ash
-                )
-            }
-            IconButton(onClick = onMoveDown, enabled = !isLast) {
-                Icon(
-                    Icons.Filled.ExpandMore,
-                    contentDescription = "Move down",
-                    tint = if (isLast) InkLine else Ash
-                )
-            }
-            IconButton(onClick = onRemove) {
-                Icon(Icons.Filled.Close, contentDescription = "Remove", tint = Ash)
-            }
-        }
-        LabeledChipRow(label = "BARS") {
-            barOptions.forEach { bars ->
-                ChoiceChip(
-                    label = if (bars == 0) "Open" else bars.toString(),
-                    selected = section.section.bars == bars,
-                    onClick = { onBars(bars) }
-                )
-            }
-        }
-        if (section.section.bars > 0) {
-            ChoiceChip(
-                label = "Auto",
-                selected = section.autoAdvance,
-                onClick = onToggleAuto
-            )
-        }
-    }
-}
-
-private fun sectionLengthLabel(slot: SetlistSlot): String = when {
-    slot.section.bars <= 0 -> "open-ended"
-    slot.autoAdvance -> "${slot.section.bars} bars · auto"
-    else -> "${slot.section.bars} bars"
 }
 
 @Composable

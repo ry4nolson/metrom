@@ -9,7 +9,6 @@ struct MetronomeView: View {
     @State private var practiceExpanded = false
     @State private var sectionsExpanded = false
     @State private var setlistsExpanded = false
-    @State private var editingSetlistId: String?
     @State private var bpmScale: CGFloat = 1
     @State private var bpmDragAccum: CGFloat = 0
     @State private var bpmDragLastY: CGFloat = 0
@@ -786,48 +785,17 @@ struct MetronomeView: View {
 
     private var setlistsBody: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if let editing = bridge.setlists.first(where: { $0.id == editingSetlistId }) {
-                ChoiceChip(label: "All setlists", selected: false) {
-                    editingSetlistId = nil
-                }
-                Text(editing.name)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(palette.bone)
-                    .lineLimit(1)
-                ChoiceChip(label: "Add current as section", selected: false) {
-                    bridge.addSectionFromCurrent(setlistId: editing.id)
-                }
-                if editing.sections.isEmpty {
-                    Text("Add the current tempo, meter, and tone as a section. Open-ended until you set a bar count.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(palette.ash)
-                } else {
-                    ForEach(Array(editing.sections.enumerated()), id: \.element.id) { index, section in
-                        sectionEditorRow(
-                            setlistId: editing.id,
-                            section: section,
-                            selected: bridge.inSetMode
-                                && bridge.activeSetlistId == editing.id
-                                && bridge.activeSectionIndex == index,
-                            isFirst: index == 0,
-                            isLast: index == editing.sections.count - 1,
-                            index: index
-                        )
-                    }
-                }
+            ChoiceChip(label: "New setlist", selected: false) {
+                newSetlistName = "Set \(bridge.setlists.count + 1)"
+                showNewSetlistDialog = true
+            }
+            if bridge.setlists.isEmpty {
+                Text("Save an ordered set of songs. Tap to load, long-press to rename.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(palette.ash)
             } else {
-                ChoiceChip(label: "New setlist", selected: false) {
-                    newSetlistName = "Set \(bridge.setlists.count + 1)"
-                    showNewSetlistDialog = true
-                }
-                if bridge.setlists.isEmpty {
-                    Text("Save an ordered set of songs. Tap to load, long-press to rename.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(palette.ash)
-                } else {
-                    ForEach(bridge.setlists) { setlist in
-                        setlistRow(setlist)
-                    }
+                ForEach(bridge.setlists) { setlist in
+                    setlistRow(setlist)
                 }
             }
         }
@@ -851,7 +819,6 @@ struct MetronomeView: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 bridge.loadSetlist(id: setlist.id)
-                editingSetlistId = setlist.id
                 setlistsExpanded = true
             }
             .onLongPressGesture {
@@ -860,7 +827,6 @@ struct MetronomeView: View {
             }
             Button {
                 bridge.deleteSetlist(id: setlist.id)
-                if editingSetlistId == setlist.id { editingSetlistId = nil }
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .semibold))
@@ -882,104 +848,6 @@ struct MetronomeView: View {
                     lineWidth: 1
                 )
         )
-    }
-
-    private func sectionEditorRow(
-        setlistId: String,
-        section: MetronomeBridge.SectionRow,
-        selected: Bool,
-        isFirst: Bool,
-        isLast: Bool,
-        index: Int
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 4) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(section.summary)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(palette.bone)
-                        .lineLimit(1)
-                    Text(sectionLengthLabel(section))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(palette.ash)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    if !isFirst { bridge.moveSection(setlistId: setlistId, from: index, to: index - 1) }
-                } label: {
-                    Image(systemName: "chevron.up")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(isFirst ? palette.inkLine : palette.ash)
-                        .frame(width: 28, height: 32)
-                }
-                .buttonStyle(.plain)
-                .disabled(isFirst)
-                Button {
-                    if !isLast { bridge.moveSection(setlistId: setlistId, from: index, to: index + 1) }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(isLast ? palette.inkLine : palette.ash)
-                        .frame(width: 28, height: 32)
-                }
-                .buttonStyle(.plain)
-                .disabled(isLast)
-                Button {
-                    bridge.removeSection(setlistId: setlistId, sectionId: section.id)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(palette.ash)
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-            }
-            Text("BARS")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(palette.ash)
-            FlowLayout {
-                ForEach([0, 2, 4, 8, 16, 32], id: \.self) { bars in
-                    ChoiceChip(
-                        label: bars == 0 ? "Open" : "\(bars)",
-                        selected: section.bars == bars
-                    ) {
-                        bridge.setSectionBars(setlistId: setlistId, sectionId: section.id, bars: bars)
-                    }
-                }
-            }
-            if section.bars > 0 {
-                ChoiceChip(
-                    label: "Auto",
-                    selected: section.autoAdvance
-                ) {
-                    bridge.setSectionAutoAdvance(
-                        setlistId: setlistId,
-                        sectionId: section.id,
-                        auto: !section.autoAdvance
-                    )
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(selected ? palette.ember.opacity(0.14) : Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(
-                    selected ? palette.ember.opacity(0.55) : palette.inkLine,
-                    lineWidth: 1
-                )
-        )
-    }
-
-    private func sectionLengthLabel(_ section: MetronomeBridge.SectionRow) -> String {
-        if section.bars <= 0 { return "open-ended" }
-        if section.autoAdvance { return "\(section.bars) bars · auto" }
-        return "\(section.bars) bars"
     }
 
     private func transportDock(landscape: Bool, padding: CGFloat) -> some View {

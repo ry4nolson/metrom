@@ -343,13 +343,13 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun createSetlist(name: String) = controller.createSetlist(name)
     fun renameSetlist(id: String, name: String) = controller.renameSetlist(id, name)
+    fun setSetlistLoop(setlistId: String, enabled: Boolean) = controller.setSetlistLoop(setlistId, enabled)
+    fun addSongToSetlist(setlistId: String, songId: String) = controller.addSongToSetlist(setlistId, songId)
+    fun removeSongFromSetlist(setlistId: String, songId: String) =
+        controller.removeSongFromSetlist(setlistId, songId)
+    fun moveSetlistSong(setlistId: String, from: Int, to: Int) =
+        controller.moveSetlistSong(setlistId, from, to)
     fun deleteSetlist(id: String) { controller.deleteSetlist(id) }
-    fun addSectionFromCurrent(setlistId: String) = controller.addSectionFromCurrent(setlistId)
-    fun removeSection(setlistId: String, sectionId: String) = controller.removeSection(setlistId, sectionId)
-    fun moveSection(setlistId: String, from: Int, to: Int) = controller.moveSection(setlistId, from, to)
-    fun setSectionBars(setlistId: String, sectionId: String, bars: Int) = controller.setSectionBars(setlistId, sectionId, bars)
-    fun setSectionAutoAdvance(setlistId: String, sectionId: String, autoAdvance: Boolean) =
-        controller.setSectionAutoAdvance(setlistId, sectionId, autoAdvance)
     fun loadSetlist(setlist: Setlist) = controller.loadSetlist(setlist)
     fun advanceSection() = controller.advanceSection()
     fun exitSetlist() = controller.exitSetlist()

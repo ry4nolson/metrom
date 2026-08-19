@@ -116,19 +116,18 @@ class MetronomeControllerSetlistTest {
     fun setSectionConfigMutatesTargetPersistsAndRoundTrips() {
         val h = harness()
         persistAndLoad(h.controller, threeSectionSet())
-        val setlistId = h.controller.state.value.activeSetlistId!!
         val slots = slots(h.controller)
         val a = slots[0].section.id
         val b = slots[1].section.id
-        h.controller.setSectionBpm(setlistId, b, 188)
-        h.controller.setSectionTimeSignature(setlistId, b, TimeSignature(5, 4))
-        h.controller.setSectionSubdivision(setlistId, b, Subdivision.SIXTEENTH)
-        h.controller.setSectionSwing(setlistId, b, SwingFeel.MED)
-        h.controller.setSectionTone(setlistId, b, MetronomeTone.Synth(ClickTone.BEEP))
-        h.controller.setSectionAccentNote(setlistId, b, AccentNote.C4)
-        h.controller.setSectionRestNote(setlistId, b, AccentNote.G4)
-        h.controller.setSectionCountInBars(setlistId, b, 2)
-        h.controller.setSectionLabel(setlistId, b, "Bridge")
+        h.controller.setSectionBpm(b, 188)
+        h.controller.setSectionTimeSignature(b, TimeSignature(5, 4))
+        h.controller.setSectionSubdivision(b, Subdivision.SIXTEENTH)
+        h.controller.setSectionSwing(b, SwingFeel.MED)
+        h.controller.setSectionTone(b, MetronomeTone.Synth(ClickTone.BEEP))
+        h.controller.setSectionAccentNote(b, AccentNote.C4)
+        h.controller.setSectionRestNote(b, AccentNote.G4)
+        h.controller.setSectionCountInBars(b, 2)
+        h.controller.setSectionLabel(b, "Bridge")
         val stored = slots(h.controller)
         assertEquals(90, stored[0].section.bpm)
         assertEquals(188, stored[1].section.bpm)
@@ -152,36 +151,33 @@ class MetronomeControllerSetlistTest {
     fun sectionConfigValidationMatchesTopLevelSetters() {
         val h = harness()
         persistAndLoad(h.controller, threeSectionSet())
-        val setlistId = h.controller.state.value.activeSetlistId!!
         val sectionId = slots(h.controller)[0].section.id
-        h.controller.setSectionBpm(setlistId, sectionId, 10)
+        h.controller.setSectionBpm(sectionId, 10)
         assertEquals(MetronomeLimits.MIN_BPM, sectionConfig(h.controller, 0).bpm)
-        h.controller.setSectionBpm(setlistId, sectionId, 400)
+        h.controller.setSectionBpm(sectionId, 400)
         assertEquals(MetronomeLimits.MAX_BPM, sectionConfig(h.controller, 0).bpm)
         h.controller.setSectionBeatAccents(
-            setlistId,
             sectionId,
             listOf(BeatAccent.STRONG, BeatAccent.MUTE),
         )
         assertEquals(4, sectionConfig(h.controller, 0).beatAccents.size)
         h.controller.setSectionBeatAccents(
-            setlistId,
             sectionId,
             List(8) { BeatAccent.MUTE },
         )
         assertEquals(4, sectionConfig(h.controller, 0).beatAccents.size)
         assertTrue(sectionConfig(h.controller, 0).beatAccents.all { it == BeatAccent.MUTE })
-        h.controller.setSectionGroupTempo(setlistId, sectionId, true)
+        h.controller.setSectionGroupTempo(sectionId, true)
         assertFalse(sectionConfig(h.controller, 0).groupTempo)
-        h.controller.setSectionTimeSignature(setlistId, sectionId, TimeSignature(6, 8))
-        h.controller.setSectionGroupTempo(setlistId, sectionId, true)
+        h.controller.setSectionTimeSignature(sectionId, TimeSignature(6, 8))
+        h.controller.setSectionGroupTempo(sectionId, true)
         assertTrue(sectionConfig(h.controller, 0).groupTempo)
-        h.controller.setSectionTimeSignature(setlistId, sectionId, TimeSignature(4, 4))
+        h.controller.setSectionTimeSignature(sectionId, TimeSignature(4, 4))
         assertFalse(sectionConfig(h.controller, 0).groupTempo)
         assertEquals(4, sectionConfig(h.controller, 0).beatAccents.size)
-        h.controller.setSectionCountInBars(setlistId, sectionId, 99)
+        h.controller.setSectionCountInBars(sectionId, 99)
         assertEquals(4, sectionConfig(h.controller, 0).countInBars)
-        h.controller.setSectionLabel(setlistId, sectionId, "  ")
+        h.controller.setSectionLabel(sectionId, "  ")
         assertEquals(null, slots(h.controller)[0].section.name)
     }
 
@@ -189,17 +185,16 @@ class MetronomeControllerSetlistTest {
     fun setSectionBarsAcceptsFreeNumbersAndClamps() {
         val h = harness()
         persistAndLoad(h.controller, threeSectionSet())
-        val setlistId = h.controller.state.value.activeSetlistId!!
         val sectionId = slots(h.controller)[0].section.id
         listOf(3, 7, 12, 24).forEach { bars ->
-            h.controller.setSectionBars(setlistId, sectionId, bars)
+            h.controller.setSectionBars(sectionId, bars)
             assertEquals(bars, slots(h.controller)[0].section.bars)
         }
-        h.controller.setSectionBars(setlistId, sectionId, 0)
+        h.controller.setSectionBars(sectionId, 0)
         assertEquals(0, slots(h.controller)[0].section.bars)
-        h.controller.setSectionBars(setlistId, sectionId, -5)
+        h.controller.setSectionBars(sectionId, -5)
         assertEquals(0, slots(h.controller)[0].section.bars)
-        h.controller.setSectionBars(setlistId, sectionId, 5000)
+        h.controller.setSectionBars(sectionId, 5000)
         assertEquals(999, slots(h.controller)[0].section.bars)
         val reloaded = reloadSlots(h)[0]
         assertEquals(999, reloaded.section.bars)
@@ -209,7 +204,6 @@ class MetronomeControllerSetlistTest {
     fun captureCurrentIntoSectionOverwritesConfigKeepsMeta() {
         val h = harness()
         persistAndLoad(h.controller, threeSectionSet(autoBars = 8))
-        val setlistId = h.controller.state.value.activeSetlistId!!
         val target = slots(h.controller)[1]
         assertEquals("B", target.section.name)
         assertEquals(8, target.section.bars)
@@ -217,7 +211,7 @@ class MetronomeControllerSetlistTest {
         h.controller.setBpm(111)
         h.controller.setSubdivision(Subdivision.SIXTEENTH)
         h.controller.setSwing(SwingFeel.HEAVY)
-        h.controller.captureCurrentIntoSection(setlistId, target.section.id)
+        h.controller.captureCurrentIntoSection(target.section.id)
         val updated = slots(h.controller)[1]
         assertEquals(111, updated.section.bpm)
         assertEquals(Subdivision.SIXTEENTH, updated.section.subdivision)
@@ -232,17 +226,16 @@ class MetronomeControllerSetlistTest {
     fun editWhileLoadedStoppedReappliesPlayingDoesNotHotSwap() {
         val h = harness()
         persistAndLoad(h.controller, threeSectionSet())
-        val setlistId = h.controller.state.value.activeSetlistId!!
         val section0 = slots(h.controller)[0].section.id
         val section1 = slots(h.controller)[1].section.id
         assertEquals(90, h.controller.state.value.bpm)
-        h.controller.setSectionBpm(setlistId, section0, 144)
+        h.controller.setSectionBpm(section0, 144)
         assertEquals(144, h.controller.state.value.bpm)
-        h.controller.setSectionBpm(setlistId, section1, 160)
+        h.controller.setSectionBpm(section1, 160)
         assertEquals(144, h.controller.state.value.bpm)
         h.controller.start()
         assertEquals(144, h.controller.state.value.bpm)
-        h.controller.setSectionBpm(setlistId, section0, 200)
+        h.controller.setSectionBpm(section0, 200)
         assertEquals(144, h.controller.state.value.bpm)
         assertTrue(h.controller.state.value.isPlaying)
         assertEquals(200, sectionConfig(h.controller, 0).bpm)
@@ -308,18 +301,19 @@ class MetronomeControllerSetlistTest {
     }
 
     @Test
-    fun deleteSectionSucceedsAfterRemoveSectionUnlink() {
+    fun deleteSectionSucceedsAfterUnlinkFromSong() {
         val controller = controller()
         persistAndLoad(controller, listOf(threeSectionSet().first()))
-        val setlistId = controller.state.value.setlists.single().id
+        val songId = controller.state.value.setlists.single().songIds.single()
         val section = slots(controller).single().section
         val blocked = controller.deleteSection(section)
         assertTrue(blocked is DeleteResult.Blocked)
         assertEquals(1, (blocked as DeleteResult.Blocked).usage.count)
         assertNotNull(controller.state.value.sections.firstOrNull { it.id == section.id })
 
-        controller.removeSection(setlistId, section.id)
-        assertTrue(controller.state.value.setlists.single().songIds.isEmpty())
+        controller.unlinkSectionFromSong(songId, section.id)
+        assertEquals(listOf(songId), controller.state.value.setlists.single().songIds)
+        assertTrue(controller.state.value.songs.first { it.id == songId }.sectionIds.isEmpty())
         assertNotNull(controller.state.value.sections.firstOrNull { it.id == section.id })
 
         val deleted = controller.deleteSection(section)
@@ -379,7 +373,7 @@ class MetronomeControllerSetlistTest {
     }
 
     @Test
-    fun deleteSetlistCleansOrphanedWrapperSongsAndTheirUnreferencedSections() {
+    fun deleteSetlistKeepsMemberSongsAndSections() {
         val controller = controller()
         persistAndLoad(controller, listOf(threeSectionSet().first()))
         val setlistId = controller.state.value.setlists.single().id
@@ -388,8 +382,8 @@ class MetronomeControllerSetlistTest {
         val cleaned = controller.deleteSetlist(setlistId)
         assertEquals(DeleteResult.Deleted, cleaned)
         assertTrue(controller.state.value.setlists.isEmpty())
-        songIds.forEach { id -> assertTrue(controller.state.value.songs.none { it.id == id }) }
-        sectionIds.forEach { id -> assertTrue(controller.state.value.sections.none { it.id == id }) }
+        songIds.forEach { id -> assertNotNull(controller.state.value.songs.firstOrNull { it.id == id }) }
+        sectionIds.forEach { id -> assertNotNull(controller.state.value.sections.firstOrNull { it.id == id }) }
     }
 
     @Test
@@ -585,6 +579,100 @@ class MetronomeControllerSetlistTest {
         assertEquals(90, looping.state.value.bpm)
     }
 
+    @Test
+    fun songMembershipRoundTripsThroughStorePreservingOrder() {
+        val h = harness()
+        val a = h.controller.createSong("A")!!
+        val b = h.controller.createSong("B")!!
+        val c = h.controller.createSong("C")!!
+        h.controller.createSetlist("Gig")
+        val setlistId = h.controller.state.value.setlists.single().id
+        h.controller.addSongToSetlist(setlistId, a.id)
+        h.controller.addSongToSetlist(setlistId, b.id)
+        h.controller.addSongToSetlist(setlistId, c.id)
+        assertEquals(listOf(a.id, b.id, c.id), h.controller.state.value.setlists.single().songIds)
+        h.controller.moveSetlistSong(setlistId, 2, 0)
+        assertEquals(listOf(c.id, a.id, b.id), h.controller.state.value.setlists.single().songIds)
+        h.controller.removeSongFromSetlist(setlistId, a.id)
+        assertEquals(listOf(c.id, b.id), h.controller.state.value.setlists.single().songIds)
+        assertNotNull(h.controller.state.value.songs.firstOrNull { it.id == a.id })
+        h.controller.setSetlistLoop(setlistId, true)
+        val stored = SetlistStore(h.database).get(setlistId)!!
+        assertEquals(listOf(c.id, b.id), stored.songIds)
+        assertTrue(stored.loop)
+        assertTrue(h.controller.state.value.setlists.single().loop)
+    }
+
+    @Test
+    fun songInTwoSetlistsUnlinkLeavesOtherAndLibrary() {
+        val h = harness()
+        val song = h.controller.createSong("Shared")!!
+        h.controller.createSetlist("A")
+        h.controller.createSetlist("B")
+        val a = h.controller.state.value.setlists.first { it.name == "A" }.id
+        val b = h.controller.state.value.setlists.first { it.name == "B" }.id
+        h.controller.addSongToSetlist(a, song.id)
+        h.controller.addSongToSetlist(b, song.id)
+        h.controller.removeSongFromSetlist(a, song.id)
+        assertTrue(h.controller.state.value.setlists.first { it.id == a }.songIds.isEmpty())
+        assertEquals(listOf(song.id), h.controller.state.value.setlists.first { it.id == b }.songIds)
+        assertNotNull(h.controller.state.value.songs.firstOrNull { it.id == song.id })
+        assertNotNull(SongStore(h.database).get(song.id))
+    }
+
+    @Test
+    fun addSongToSetlistDrivesPlaybackSequenceFromSongIds() {
+        val h = harness()
+        h.controller.createSetlist("Gig")
+        val setlistId = h.controller.state.value.setlists.single().id
+        val song1 = createTwoSectionSong(h.controller, "One", 90, 100)
+        h.controller.addSongToSetlist(setlistId, song1)
+        h.controller.loadSetlist(h.controller.state.value.setlists.single())
+        assertEquals(2, h.controller.state.value.activeSlots().size)
+        assertEquals(listOf(90, 100), h.controller.state.value.activeSlots().map { it.section.bpm })
+
+        val song2 = createTwoSectionSong(h.controller, "Two", 110, 120)
+        h.controller.addSongToSetlist(setlistId, song2)
+        val afterAdd = h.controller.state.value.activeSlots()
+        assertEquals(listOf(song1, song2), h.controller.state.value.setlists.single().songIds)
+        assertEquals(4, afterAdd.size)
+        assertEquals(listOf(90, 100, 110, 120), afterAdd.map { it.section.bpm })
+        assertEquals(listOf(song1, song1, song2, song2), afterAdd.map { it.songId })
+
+        h.controller.start()
+        seedBar(h.controller)
+        val bpms = mutableListOf(h.controller.state.value.bpm)
+        repeat(3) {
+            advanceBars(h.controller, 2)
+            bpms += h.controller.state.value.bpm
+        }
+        assertEquals(listOf(90, 100, 110, 120), bpms)
+        assertEquals(3, h.controller.state.value.activeSectionIndex)
+        advanceBars(h.controller, 2)
+        assertFalse(h.controller.state.value.isPlaying)
+        assertEquals(0, h.controller.state.value.activeSectionIndex)
+        assertEquals(90, h.controller.state.value.bpm)
+
+        h.controller.setSongLoop(song2, true)
+        h.controller.loadSetlist(h.controller.state.value.setlists.single())
+        h.controller.start()
+        seedBar(h.controller)
+        repeat(4) { advanceBars(h.controller, 2) }
+        assertTrue(h.controller.state.value.isPlaying)
+        assertEquals(2, h.controller.state.value.activeSectionIndex)
+        assertEquals(110, h.controller.state.value.bpm)
+
+        h.controller.setSongLoop(song2, false)
+        h.controller.setSetlistLoop(setlistId, true)
+        h.controller.loadSetlist(h.controller.state.value.setlists.single())
+        h.controller.start()
+        seedBar(h.controller)
+        repeat(4) { advanceBars(h.controller, 2) }
+        assertTrue(h.controller.state.value.isPlaying)
+        assertEquals(0, h.controller.state.value.activeSectionIndex)
+        assertEquals(90, h.controller.state.value.bpm)
+    }
+
     private fun sectionConfig(controller: MetronomeController, index: Int) =
         slots(controller)[index].section
 
@@ -597,12 +685,34 @@ class MetronomeControllerSetlistTest {
         controller.createSetlist("Set")
         val id = controller.state.value.setlists.single().id
         specs.forEach { spec ->
-            controller.addSectionFromCurrent(id)
-            val added = slots(controller).last()
-            applySpec(controller, spec, added.section.id)
-            controller.setSectionAutoAdvance(id, added.section.id, spec.autoAdvance)
+            val song = controller.createSongFromCurrent(spec.name ?: "Song")!!
+            val sectionId = song.sectionIds.single()
+            applySpec(controller, spec, sectionId)
+            controller.setSongSectionAutoAdvance(song.id, sectionId, spec.autoAdvance)
+            controller.addSongToSetlist(id, song.id)
         }
         controller.loadSetlist(controller.state.value.setlists.single())
+    }
+
+    private fun createTwoSectionSong(
+        controller: MetronomeController,
+        name: String,
+        firstBpm: Int,
+        secondBpm: Int,
+    ): String {
+        val song = controller.createSong(name)!!
+        controller.setBpm(firstBpm)
+        controller.addSectionToSong(song.id)
+        controller.setBpm(secondBpm)
+        controller.addSectionToSong(song.id)
+        val ids = controller.state.value.songs.first { it.id == song.id }.sectionIds
+        controller.setSectionBpm(ids[0], firstBpm)
+        controller.setSectionBpm(ids[1], secondBpm)
+        controller.setSectionBars(ids[0], 2)
+        controller.setSectionBars(ids[1], 2)
+        controller.setSongSectionAutoAdvance(song.id, ids[0], true)
+        controller.setSongSectionAutoAdvance(song.id, ids[1], true)
+        return song.id
     }
 
     private fun applySpec(controller: MetronomeController, spec: SlotSpec, sectionId: String) {

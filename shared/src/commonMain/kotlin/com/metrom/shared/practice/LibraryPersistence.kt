@@ -10,7 +10,7 @@ import com.metrom.shared.library.SongSectionRef
 import com.metrom.shared.library.SongStore
 import com.metrom.shared.randomUuid
 
-/** Flattened setlist playback/edit slot: a song's section in setlist order. */
+/** Computed playback/edit projection of a song section in flattened sequence order. */
 data class SetlistSlot(
     val songId: String,
     val section: Section,
@@ -124,6 +124,8 @@ internal class LibraryPersistence(private val db: MetromDatabase) {
         }
     }
 
+    fun getSetlist(id: String): Setlist? = setlists.get(id)
+
     fun createSetlist(name: String): Setlist {
         val setlist = Setlist(id = randomUuid(), name = name)
         setlists.upsert(setlist)
@@ -135,103 +137,37 @@ internal class LibraryPersistence(private val db: MetromDatabase) {
         setlists.upsert(current.copy(name = name))
     }
 
+    fun setSetlistLoop(id: String, enabled: Boolean) {
+        val current = setlists.get(id) ?: return
+        setlists.upsert(current.copy(loop = enabled))
+    }
+
+    fun addSongToSetlist(setlistId: String, songId: String): Boolean {
+        val setlist = setlists.get(setlistId) ?: return false
+        if (songs.get(songId) == null) return false
+        setlists.upsert(setlist.copy(songIds = setlist.songIds + songId))
+        return true
+    }
+
+    fun removeSongFromSetlist(setlistId: String, songId: String) {
+        val setlist = setlists.get(setlistId) ?: return
+        val idx = setlist.songIds.indexOf(songId)
+        if (idx < 0) return
+        val remaining = setlist.songIds.toMutableList().also { it.removeAt(idx) }
+        setlists.upsert(setlist.copy(songIds = remaining))
+    }
+
+    fun moveSetlistSong(setlistId: String, from: Int, to: Int) {
+        val setlist = setlists.get(setlistId) ?: return
+        val ids = setlist.songIds.toMutableList()
+        if (from !in ids.indices || to !in ids.indices) return
+        val item = ids.removeAt(from)
+        ids.add(to, item)
+        setlists.upsert(setlist.copy(songIds = ids))
+    }
+
+    /** Unlink only: songs and sections stay in the library. Junction rows cascade. */
     fun deleteSetlist(id: String) {
-        db.transaction {
-            val existing = setlists.get(id) ?: return@transaction
-            val songIds = existing.songIds
-            setlists.delete(id)
-            songIds.forEach { songId ->
-                if (songs.referenceCount(songId) == 0L) {
-                    val sectionIds = songs.get(songId)?.sectionIds.orEmpty()
-                    songs.delete(songId)
-                    sectionIds.forEach { sectionId ->
-                        if (sections.referenceCount(sectionId) == 0L) {
-                            sections.delete(sectionId)
-                        }
-                    }
-                }
-            }
-        }
+        setlists.delete(id)
     }
-
-    fun addSlot(setlistId: String, section: Section, autoAdvance: Boolean = false): Song? {
-        val setlist = setlists.get(setlistId) ?: return null
-        sections.upsert(section)
-        val song = Song(
-            id = randomUuid(),
-            name = section.displayName(),
-            sectionRefs = listOf(SongSectionRef(section.id, autoAdvance)),
-        )
-        songs.upsert(song)
-        setlists.upsert(setlist.copy(songIds = setlist.songIds + song.id))
-        return song
-    }
-
-    fun removeSlot(setlistId: String, sectionId: String) {
-        db.transaction {
-            val setlist = setlists.get(setlistId) ?: return@transaction
-            val songId = setlist.songIds.firstOrNull { id ->
-                songs.get(id)?.sectionIds?.contains(sectionId) == true
-            } ?: return@transaction
-            val song = songs.get(songId) ?: return@transaction
-            val remainingRefs = song.sectionRefs.filterNot { it.sectionId == sectionId }
-            if (remainingRefs.isEmpty()) {
-                setlists.upsert(setlist.copy(songIds = setlist.songIds.filterNot { it == songId }))
-                songs.delete(songId)
-            } else {
-                songs.upsert(song.copy(sectionRefs = remainingRefs))
-            }
-            // Unlink only: the Section row survives even when no song still references it.
-        }
-    }
-
-    fun moveSlot(setlistId: String, from: Int, to: Int) {
-        val setlist = setlists.get(setlistId) ?: return
-        val slots = flatten(setlist)
-        if (from !in slots.indices || to !in slots.indices) return
-        val fromSongId = slots[from].songId
-        val toSongId = slots[to].songId
-        if (fromSongId == toSongId) {
-            val song = songs.get(fromSongId) ?: return
-            val refs = song.sectionRefs.toMutableList()
-            val fromRef = refs.indexOfFirst { it.sectionId == slots[from].section.id }
-            val toRef = refs.indexOfFirst { it.sectionId == slots[to].section.id }
-            if (fromRef < 0 || toRef < 0) return
-            val item = refs.removeAt(fromRef)
-            refs.add(toRef, item)
-            songs.upsert(song.copy(sectionRefs = refs))
-            return
-        }
-        val songIds = setlist.songIds.toMutableList()
-        val fromIndex = songIds.indexOf(fromSongId)
-        val toIndex = songIds.indexOf(toSongId)
-        if (fromIndex < 0 || toIndex < 0) return
-        val item = songIds.removeAt(fromIndex)
-        songIds.add(toIndex, item)
-        setlists.upsert(setlist.copy(songIds = songIds))
-    }
-
-    fun setAutoAdvance(setlistId: String, sectionId: String, autoAdvance: Boolean) {
-        val setlist = setlists.get(setlistId) ?: return
-        val songId = setlist.songIds.firstOrNull { id ->
-            songs.get(id)?.sectionIds?.contains(sectionId) == true
-        } ?: return
-        val song = songs.get(songId) ?: return
-        songs.upsert(
-            song.copy(
-                sectionRefs = song.sectionRefs.map {
-                    if (it.sectionId == sectionId) it.copy(autoAdvance = autoAdvance) else it
-                },
-            ),
-        )
-    }
-
-    private fun flatten(setlist: Setlist): List<SetlistSlot> =
-        setlist.songIds.flatMap { songId ->
-            val song = songs.get(songId) ?: return@flatMap emptyList()
-            song.sectionRefs.mapNotNull { ref ->
-                val section = sections.get(ref.sectionId) ?: return@mapNotNull null
-                SetlistSlot(songId, section, ref.autoAdvance)
-            }
-        }
 }

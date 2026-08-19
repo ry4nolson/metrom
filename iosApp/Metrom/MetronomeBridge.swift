@@ -448,21 +448,6 @@ final class MetronomeBridge: ObservableObject {
         refreshFromState()
     }
 
-    func addSectionFromCurrent(setlistId: String) {
-        controller.addSectionFromCurrent(setlistId: setlistId)
-        refreshFromState()
-    }
-
-    func removeSection(setlistId: String, sectionId: String) {
-        controller.removeSection(setlistId: setlistId, sectionId: sectionId)
-        refreshFromState()
-    }
-
-    func moveSection(setlistId: String, from: Int, to: Int) {
-        controller.moveSection(setlistId: setlistId, from: Int32(from), to: Int32(to))
-        refreshFromState()
-    }
-
     func loadSetlist(id: String) {
         if let setlist = ui?.setlists.first(where: { $0.id == id }) {
             controller.loadSetlist(setlist: setlist)
@@ -477,16 +462,6 @@ final class MetronomeBridge: ObservableObject {
 
     func exitSetlist() {
         controller.exitSetlist()
-        refreshFromState()
-    }
-
-    func setSectionBars(setlistId: String, sectionId: String, bars: Int) {
-        controller.setSectionBars(setlistId: setlistId, sectionId: sectionId, bars: Int32(max(0, bars)))
-        refreshFromState()
-    }
-
-    func setSectionAutoAdvance(setlistId: String, sectionId: String, auto: Bool) {
-        controller.setSectionAutoAdvance(setlistId: setlistId, sectionId: sectionId, autoAdvance: auto)
         refreshFromState()
     }
 
