@@ -13,19 +13,28 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +59,8 @@ import com.metrom.app.ui.theme.EmberSoft
 import com.metrom.app.ui.theme.Ink
 import com.metrom.app.ui.theme.InkElevated
 import com.metrom.app.ui.theme.InkLine
+import com.metrom.app.ui.theme.Mist
+import com.metrom.shared.library.DeleteResult
 import com.metrom.shared.library.Section
 import com.metrom.shared.library.Setlist
 import com.metrom.shared.library.Song
@@ -141,6 +152,7 @@ private fun SectionsTab(
     var renameText by remember { mutableStateOf("") }
     var creating by remember { mutableStateOf(false) }
     var createName by remember { mutableStateOf("") }
+    var blocked by remember { mutableStateOf<BlockedNotice?>(null) }
 
     Column(
         modifier = Modifier
@@ -186,7 +198,13 @@ private fun SectionsTab(
                             onArmAndBounce()
                         },
                         onEdit = { viewModel.openSectionEditor(section.id, EditorNav.Origin.Library) },
-                        onDelete = { viewModel.deleteSection(section) },
+                        onDelete = {
+                            blocked = blockedNotice(
+                                viewModel.deleteSection(section),
+                                singular = "song",
+                                plural = "songs",
+                            )
+                        },
                         onRename = {
                             renaming = section
                             renameText = section.displayName()
@@ -222,6 +240,10 @@ private fun SectionsTab(
             onDismiss = { renaming = null }
         )
     }
+
+    blocked?.let { notice ->
+        BlockedUseDialog(notice = notice, onDismiss = { blocked = null })
+    }
 }
 
 @Composable
@@ -233,6 +255,7 @@ private fun SongsTab(
     var creating by remember { mutableStateOf(false) }
     var fromCurrent by remember { mutableStateOf(false) }
     var createName by remember { mutableStateOf("") }
+    var blocked by remember { mutableStateOf<BlockedNotice?>(null) }
 
     Column(
         modifier = Modifier
@@ -280,8 +303,14 @@ private fun SongsTab(
                             viewModel.loadSong(song)
                             onArmAndBounce()
                         },
-                        onEdit = { viewModel.openSongEditor(song.id) },
-                        onDelete = { viewModel.deleteSong(song) }
+                        onEdit = { viewModel.openSongEditor(song.id, EditorNav.Origin.Library) },
+                        onDelete = {
+                            blocked = blockedNotice(
+                                viewModel.deleteSong(song),
+                                singular = "setlist",
+                                plural = "setlists",
+                            )
+                        }
                     )
                 }
             }
@@ -300,6 +329,10 @@ private fun SongsTab(
             },
             onDismiss = { creating = false }
         )
+    }
+
+    blocked?.let { notice ->
+        BlockedUseDialog(notice = notice, onDismiss = { blocked = null })
     }
 }
 
@@ -345,13 +378,13 @@ private fun SetlistsTab(
                 items(state.setlists, key = { it.id }) { setlist ->
                     SetlistRow(
                         setlist = setlist,
-                        slotCount = state.setlistSlots(setlist).size,
+                        songCount = setlist.songIds.size,
                         selected = state.activeSetlistId == setlist.id,
                         onLoad = {
                             viewModel.loadSetlist(setlist)
                             onArmAndBounce()
                         },
-                        onEdit = { },
+                        onEdit = { viewModel.openSetlistEditor(setlist.id) },
                         onDelete = { viewModel.deleteSetlist(setlist.id) },
                         onRename = {
                             renaming = setlist
@@ -490,14 +523,14 @@ private fun SongLibraryRow(
 @Composable
 private fun SetlistRow(
     setlist: Setlist,
-    slotCount: Int,
+    songCount: Int,
     selected: Boolean,
     onLoad: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onRename: () -> Unit
 ) {
-    val countLabel = if (slotCount == 1) "1 section" else "$slotCount sections"
+    val countLabel = if (songCount == 1) "1 song" else "$songCount songs"
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -580,4 +613,284 @@ private fun NameDialog(
         },
         containerColor = InkElevated
     )
+}
+
+private data class BlockedNotice(val title: String, val names: List<String>)
+
+private fun blockedNotice(
+    result: DeleteResult,
+    singular: String,
+    plural: String,
+): BlockedNotice? {
+    val blocked = result as? DeleteResult.Blocked ?: return null
+    val count = blocked.usage.count
+    return BlockedNotice(
+        title = "In use by $count ${if (count == 1) singular else plural}",
+        names = blocked.usage.referencedBy.map { it.name.ifBlank { it.id } },
+    )
+}
+
+@Composable
+private fun BlockedUseDialog(notice: BlockedNotice, onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(notice.title, color = Bone) },
+        text = {
+            Text(
+                notice.names.joinToString("\n").ifBlank { notice.title },
+                color = Ash
+            )
+        },
+        confirmButton = {
+            Text(
+                "OK",
+                color = EmberSoft,
+                modifier = Modifier
+                    .clickable(onClick = onDismiss)
+                    .padding(8.dp)
+            )
+        },
+        containerColor = InkElevated
+    )
+}
+
+@Composable
+internal fun SetlistEditorScreen(
+    setlistId: String,
+    state: MetronomeUiState,
+    viewModel: MetronomeViewModel,
+    onBack: () -> Unit,
+    onOpenSong: (String) -> Unit,
+) {
+    val setlist = state.setlists.firstOrNull { it.id == setlistId }
+    if (setlist == null) {
+        LaunchedEffect(setlistId) { onBack() }
+        return
+    }
+    var pickingSong by remember { mutableStateOf(false) }
+    val songsById = state.songs.associateBy { it.id }
+
+    BackHandler(onBack = onBack)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(BackgroundTop, Ink, BackgroundBottom)
+                )
+            )
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+                .padding(top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Bone
+                )
+            }
+            OutlinedTextField(
+                value = setlist.name,
+                onValueChange = { viewModel.renameSetlist(setlistId, it) },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                label = { Text("Setlist") }
+            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Text("Loop", style = MaterialTheme.typography.labelMedium, color = Ash)
+                Switch(
+                    checked = setlist.loop,
+                    onCheckedChange = { viewModel.setSetlistLoop(setlistId, it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Ink,
+                        checkedTrackColor = Ember,
+                        uncheckedThumbColor = Mist,
+                        uncheckedTrackColor = InkLine,
+                        uncheckedBorderColor = InkLine
+                    )
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp)
+                .padding(top = 12.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ChoiceChip(
+                label = "Add song",
+                selected = false,
+                onClick = { pickingSong = true }
+            )
+            if (setlist.songIds.isEmpty()) {
+                Text(
+                    "Add songs to build the set order.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Ash
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    itemsIndexed(
+                        setlist.songIds,
+                        key = { index, songId -> "$index-$songId" }
+                    ) { index, songId ->
+                        val song = songsById[songId]
+                        val sectionCount = song?.sectionRefs?.size ?: 0
+                        SetlistSongEditorRow(
+                            name = song?.name ?: "Missing song",
+                            sectionCount = sectionCount,
+                            isFirst = index == 0,
+                            isLast = index == setlist.songIds.lastIndex,
+                            onOpen = { if (song != null) onOpenSong(songId) },
+                            onMoveUp = { viewModel.moveSetlistSong(setlistId, index, index - 1) },
+                            onMoveDown = { viewModel.moveSetlistSong(setlistId, index, index + 1) },
+                            onRemove = { viewModel.removeSongFromSetlist(setlistId, songId) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (pickingSong) {
+        val alreadyInSet = setlist.songIds.toSet()
+        val available = state.songs.filter { it.id !in alreadyInSet }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pickingSong = false },
+            title = { Text("Add song", color = Bone) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (available.isEmpty()) {
+                        Text(
+                            if (state.songs.isEmpty()) {
+                                "No songs in the library."
+                            } else {
+                                "All songs are already in this setlist."
+                            },
+                            color = Ash
+                        )
+                    } else {
+                        available.forEach { song ->
+                            val count = song.sectionRefs.size
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .border(1.dp, InkLine, RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        viewModel.addSongToSetlist(setlistId, song.id)
+                                        pickingSong = false
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Text(
+                                    song.name,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = Bone,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    if (count == 1) "1 section" else "$count sections",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Ash
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Text(
+                    "CANCEL",
+                    color = Ash,
+                    modifier = Modifier
+                        .clickable { pickingSong = false }
+                        .padding(8.dp)
+                )
+            },
+            containerColor = InkElevated
+        )
+    }
+}
+
+@Composable
+private fun SetlistSongEditorRow(
+    name: String,
+    sectionCount: Int,
+    isFirst: Boolean,
+    isLast: Boolean,
+    onOpen: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, InkLine, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onOpen)
+        ) {
+            Text(
+                name,
+                style = MaterialTheme.typography.titleLarge,
+                color = Bone,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                if (sectionCount == 1) "1 section" else "$sectionCount sections",
+                style = MaterialTheme.typography.labelMedium,
+                color = Ash
+            )
+        }
+        IconButton(onClick = onMoveUp, enabled = !isFirst) {
+            Icon(
+                Icons.Filled.ExpandLess,
+                contentDescription = "Move up",
+                tint = if (isFirst) InkLine else Ash
+            )
+        }
+        IconButton(onClick = onMoveDown, enabled = !isLast) {
+            Icon(
+                Icons.Filled.ExpandMore,
+                contentDescription = "Move down",
+                tint = if (isLast) InkLine else Ash
+            )
+        }
+        IconButton(onClick = onRemove) {
+            Icon(Icons.Filled.Close, contentDescription = "Remove", tint = Ash)
+        }
+    }
 }

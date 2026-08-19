@@ -23,6 +23,7 @@ import com.metrom.app.platform.AndroidUiClock
 import com.metrom.app.garmin.GarminCompanion
 import com.metrom.shared.audio.SampleToneCache
 import com.metrom.shared.garmin.GarminProtocol
+import com.metrom.shared.library.DeleteResult
 import com.metrom.shared.library.Section
 import com.metrom.shared.library.Setlist
 import com.metrom.shared.library.Song
@@ -48,11 +49,13 @@ import kotlinx.coroutines.flow.asStateFlow
 sealed class EditorNav {
     data object None : EditorNav()
     data class SectionEditor(val sectionId: String, val origin: Origin) : EditorNav()
-    data class SongEditor(val songId: String) : EditorNav()
+    data class SongEditor(val songId: String, val origin: Origin) : EditorNav()
+    data class SetlistEditor(val setlistId: String) : EditorNav()
 
     sealed class Origin {
         data object Library : Origin()
-        data class Song(val songId: String) : Origin()
+        data class Song(val songId: String, val origin: Origin = Library) : Origin()
+        data class Setlist(val setlistId: String) : Origin()
     }
 }
 
@@ -262,7 +265,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     fun toggleTrainerAutoStop() = controller.toggleTrainerAutoStop()
     fun saveCurrentSection(name: String? = null) = controller.saveCurrentSection(name)
     fun loadSection(section: Section) = controller.loadSection(section)
-    fun deleteSection(section: Section) { controller.deleteSection(section) }
+    fun deleteSection(section: Section): DeleteResult = controller.deleteSection(section)
     fun renameSection(section: Section, name: String) = controller.renameSection(section, name)
     fun updateActiveSection() = controller.updateActiveSection()
 
@@ -279,7 +282,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
     fun setSongSectionAutoAdvance(songId: String, sectionId: String, autoAdvance: Boolean) =
         controller.setSongSectionAutoAdvance(songId, sectionId, autoAdvance)
     fun loadSong(song: Song) = controller.loadSong(song)
-    fun deleteSong(song: Song) { controller.deleteSong(song) }
+    fun deleteSong(song: Song): DeleteResult = controller.deleteSong(song)
 
     fun setSectionBpm(sectionId: String, bpm: Int) = controller.setSectionBpm(sectionId, bpm)
     fun setSectionTimeSignature(sectionId: String, signature: TimeSignature) =
@@ -320,8 +323,12 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         _editorNav.value = EditorNav.SectionEditor(sectionId, origin)
     }
 
-    fun openSongEditor(songId: String) {
-        _editorNav.value = EditorNav.SongEditor(songId)
+    fun openSongEditor(songId: String, origin: EditorNav.Origin = EditorNav.Origin.Library) {
+        _editorNav.value = EditorNav.SongEditor(songId, origin)
+    }
+
+    fun openSetlistEditor(setlistId: String) {
+        _editorNav.value = EditorNav.SetlistEditor(setlistId)
     }
 
     fun closeEditor() {
@@ -332,9 +339,18 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         when (val nav = _editorNav.value) {
             is EditorNav.SectionEditor -> when (val origin = nav.origin) {
                 EditorNav.Origin.Library -> _editorNav.value = EditorNav.None
-                is EditorNav.Origin.Song -> _editorNav.value = EditorNav.SongEditor(origin.songId)
+                is EditorNav.Origin.Song ->
+                    _editorNav.value = EditorNav.SongEditor(origin.songId, origin.origin)
+                is EditorNav.Origin.Setlist ->
+                    _editorNav.value = EditorNav.SetlistEditor(origin.setlistId)
             }
-            is EditorNav.SongEditor, EditorNav.None -> _editorNav.value = EditorNav.None
+            is EditorNav.SongEditor -> when (val origin = nav.origin) {
+                EditorNav.Origin.Library -> _editorNav.value = EditorNav.None
+                is EditorNav.Origin.Setlist ->
+                    _editorNav.value = EditorNav.SetlistEditor(origin.setlistId)
+                is EditorNav.Origin.Song -> _editorNav.value = EditorNav.None
+            }
+            is EditorNav.SetlistEditor, EditorNav.None -> _editorNav.value = EditorNav.None
         }
     }
 
@@ -349,7 +365,7 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         controller.removeSongFromSetlist(setlistId, songId)
     fun moveSetlistSong(setlistId: String, from: Int, to: Int) =
         controller.moveSetlistSong(setlistId, from, to)
-    fun deleteSetlist(id: String) { controller.deleteSetlist(id) }
+    fun deleteSetlist(id: String): DeleteResult = controller.deleteSetlist(id)
     fun loadSetlist(setlist: Setlist) = controller.loadSetlist(setlist)
     fun advanceSection() = controller.advanceSection()
     fun exitSetlist() = controller.exitSetlist()

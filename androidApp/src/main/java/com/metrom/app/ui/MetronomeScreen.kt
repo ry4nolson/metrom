@@ -295,7 +295,19 @@ fun MetronomeScreen(viewModel: MetronomeViewModel) {
                     viewModel = viewModel,
                     onBack = viewModel::editorBack,
                     onOpenSection = { sectionId ->
-                        viewModel.openSectionEditor(sectionId, EditorNav.Origin.Song(nav.songId))
+                        viewModel.openSectionEditor(
+                            sectionId,
+                            EditorNav.Origin.Song(nav.songId, nav.origin),
+                        )
+                    }
+                )
+                is EditorNav.SetlistEditor -> SetlistEditorScreen(
+                    setlistId = nav.setlistId,
+                    state = state,
+                    viewModel = viewModel,
+                    onBack = viewModel::editorBack,
+                    onOpenSong = { songId ->
+                        viewModel.openSongEditor(songId, EditorNav.Origin.Setlist(nav.setlistId))
                     }
                 )
                 EditorNav.None -> Unit
