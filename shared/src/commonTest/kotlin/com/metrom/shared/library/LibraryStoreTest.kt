@@ -98,6 +98,36 @@ class LibraryStoreTest {
     }
 
     @Test
+    fun songAllowsRepeatedSectionRefs() {
+        val (sections, songs, _) = stores()
+        sections.upsert(sampleSection("verse", "Verse", 16, 100))
+        sections.upsert(sampleSection("chorus", "Chorus", 8, 110))
+        songs.upsert(
+            Song(
+                id = "tune",
+                name = "Tune",
+                sectionRefs = listOf(
+                    SongSectionRef("verse", autoAdvance = true),
+                    SongSectionRef("chorus", autoAdvance = true),
+                    SongSectionRef("verse", autoAdvance = false),
+                    SongSectionRef("chorus", autoAdvance = true),
+                ),
+            ),
+        )
+        val loaded = songs.get("tune")!!
+        assertEquals(listOf("verse", "chorus", "verse", "chorus"), loaded.sectionIds)
+        assertEquals(listOf(true, true, false, true), loaded.sectionRefs.map { it.autoAdvance })
+        songs.setSectionRefs(
+            "tune",
+            loaded.sectionRefs + SongSectionRef("verse", autoAdvance = true),
+        )
+        assertEquals(
+            listOf("verse", "chorus", "verse", "chorus", "verse"),
+            songs.get("tune")?.sectionIds,
+        )
+    }
+
+    @Test
     fun deletingReferencedSectionIsRestrictedUntilUnlinked() {
         val (sections, songs, _) = stores()
         sections.upsert(sampleSection("sec-r", "R", 4, 100))

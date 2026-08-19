@@ -2710,7 +2710,7 @@ private fun SongEditorScreen(
 
             if (song.sectionRefs.isEmpty()) {
                 Text(
-                    "Add sections to build the song order.",
+                    "Add sections in play order. The same section can appear more than once (verse, chorus, verse…).",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Ash
                 )
@@ -2725,9 +2725,9 @@ private fun SongEditorScreen(
                         onOpen = { onOpenSection(ref.sectionId) },
                         onMoveUp = { viewModel.moveSongSection(songId, index, index - 1) },
                         onMoveDown = { viewModel.moveSongSection(songId, index, index + 1) },
-                        onUnlink = { viewModel.unlinkSectionFromSong(songId, ref.sectionId) },
+                        onUnlink = { viewModel.unlinkSongSectionAt(songId, index) },
                         onToggleAuto = {
-                            viewModel.setSongSectionAutoAdvance(songId, ref.sectionId, !ref.autoAdvance)
+                            viewModel.setSongSectionAutoAdvanceAt(songId, index, !ref.autoAdvance)
                         }
                     )
                 }
@@ -2747,19 +2747,10 @@ private fun SongEditorScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val alreadyInSong = song.sectionIds.toSet()
-                    val available = state.sections.filter { it.id !in alreadyInSong }
-                    if (available.isEmpty()) {
-                        Text(
-                            if (state.sections.isEmpty()) {
-                                "No saved sections."
-                            } else {
-                                "All saved sections are already in this song."
-                            },
-                            color = Ash
-                        )
+                    if (state.sections.isEmpty()) {
+                        Text("No saved sections.", color = Ash)
                     } else {
-                        available.forEach { saved ->
+                        state.sections.forEach { saved ->
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -2767,7 +2758,6 @@ private fun SongEditorScreen(
                                     .border(1.dp, InkLine, RoundedCornerShape(12.dp))
                                     .clickable {
                                         viewModel.addExistingSectionToSong(songId, saved.id)
-                                        pickingSaved = false
                                     }
                                     .padding(horizontal = 12.dp, vertical = 10.dp)
                             ) {

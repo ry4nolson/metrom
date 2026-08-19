@@ -474,6 +474,49 @@ class MetronomeControllerSetlistTest {
     }
 
     @Test
+    fun songReusesTheSameSectionInPlayOrder() {
+        val h = harness()
+        listOf("Intro", "Verse", "Chorus", "Bridge", "Outro").forEach { name ->
+            h.controller.saveCurrentSection(name)
+        }
+        val byName = h.controller.state.value.sections.associateBy { it.name }
+        val intro = byName["Intro"]!!.id
+        val verse = byName["Verse"]!!.id
+        val chorus = byName["Chorus"]!!.id
+        val bridge = byName["Bridge"]!!.id
+        val outro = byName["Outro"]!!.id
+        val song = h.controller.createSong("Tune")!!
+        listOf(intro, verse, chorus, bridge, verse, chorus, outro).forEach { sectionId ->
+            h.controller.addExistingSectionToSong(song.id, sectionId)
+        }
+        val ordered = h.controller.state.value.songs.first { it.id == song.id }
+        assertEquals(
+            listOf(intro, verse, chorus, bridge, verse, chorus, outro),
+            ordered.sectionIds,
+        )
+
+        h.controller.setSectionBars(verse, 2)
+        h.controller.setSongSectionAutoAdvanceAt(song.id, 1, true)
+        h.controller.setSongSectionAutoAdvanceAt(song.id, 4, false)
+        val refs = h.controller.state.value.songs.first { it.id == song.id }.sectionRefs
+        assertTrue(refs[1].autoAdvance)
+        assertFalse(refs[4].autoAdvance)
+
+        h.controller.loadSong(h.controller.state.value.songs.first { it.id == song.id })
+        assertEquals(
+            listOf(intro, verse, chorus, bridge, verse, chorus, outro),
+            h.controller.state.value.activeSlots().map { it.section.id },
+        )
+
+        h.controller.unlinkSectionFromSongAt(song.id, 5)
+        val after = h.controller.state.value.songs.first { it.id == song.id }
+        assertEquals(listOf(intro, verse, chorus, bridge, verse, outro), after.sectionIds)
+        assertEquals(2, after.sectionIds.count { it == verse })
+        assertEquals(1, after.sectionIds.count { it == chorus })
+        assertEquals(5, h.controller.state.value.sections.size)
+    }
+
+    @Test
     fun loadSongAdvancesAutoSectionThenHoldsOpenEndedThenLoopsOrStops() {
         val h = harness()
         val sections = SectionStore(h.database)

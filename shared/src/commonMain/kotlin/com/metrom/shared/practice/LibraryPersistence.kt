@@ -87,7 +87,13 @@ internal class LibraryPersistence(private val db: MetromDatabase) {
         val song = songs.get(songId) ?: return
         val idx = song.sectionRefs.indexOfFirst { it.sectionId == sectionId }
         if (idx < 0) return
-        val remaining = song.sectionRefs.toMutableList().also { it.removeAt(idx) }
+        unlinkSectionFromSongAt(songId, idx)
+    }
+
+    fun unlinkSectionFromSongAt(songId: String, index: Int) {
+        val song = songs.get(songId) ?: return
+        if (index !in song.sectionRefs.indices) return
+        val remaining = song.sectionRefs.toMutableList().also { it.removeAt(index) }
         songs.upsert(song.copy(sectionRefs = remaining))
     }
 
@@ -109,6 +115,14 @@ internal class LibraryPersistence(private val db: MetromDatabase) {
                 },
             ),
         )
+    }
+
+    fun setSongSectionAutoAdvanceAt(songId: String, index: Int, autoAdvance: Boolean) {
+        val song = songs.get(songId) ?: return
+        if (index !in song.sectionRefs.indices) return
+        val refs = song.sectionRefs.toMutableList()
+        refs[index] = refs[index].copy(autoAdvance = autoAdvance)
+        songs.upsert(song.copy(sectionRefs = refs))
     }
 
     fun clearAutoAdvanceForSection(sectionId: String) {

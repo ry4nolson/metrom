@@ -626,9 +626,17 @@ class MetronomeController(
     }
 
     fun unlinkSectionFromSong(songId: String, sectionId: String) {
+        val song = library.getSong(songId) ?: return
+        val index = song.sectionRefs.indexOfFirst { it.sectionId == sectionId }
+        if (index < 0) return
+        unlinkSectionFromSongAt(songId, index)
+    }
+
+    fun unlinkSectionFromSongAt(songId: String, index: Int) {
         val s = _state.value
-        val removedIndex = s.activeSlots().indexOfFirst { it.songId == songId && it.section.id == sectionId }
-        library.unlinkSectionFromSong(songId, sectionId)
+        val songSlots = s.activeSlots().withIndex().filter { it.value.songId == songId }
+        val removedIndex = songSlots.getOrNull(index)?.index ?: -1
+        library.unlinkSectionFromSongAt(songId, index)
         reloadLibrary()
         if (removedIndex < 0 || s.activeSectionIndex < 0) return
         val remainingLast = _state.value.activeSlots().lastIndex
@@ -663,6 +671,15 @@ class MetronomeController(
         val section = library.getSection(sectionId)
         val enabled = autoAdvance && (section?.bars ?: 0) > 0
         library.setSongSectionAutoAdvance(songId, sectionId, enabled)
+        reloadLibrary()
+    }
+
+    fun setSongSectionAutoAdvanceAt(songId: String, index: Int, autoAdvance: Boolean) {
+        val song = library.getSong(songId) ?: return
+        val ref = song.sectionRefs.getOrNull(index) ?: return
+        val section = library.getSection(ref.sectionId)
+        val enabled = autoAdvance && (section?.bars ?: 0) > 0
+        library.setSongSectionAutoAdvanceAt(songId, index, enabled)
         reloadLibrary()
     }
 

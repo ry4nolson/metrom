@@ -278,9 +278,13 @@ class MetronomeViewModel(application: Application) : AndroidViewModel(applicatio
         controller.addExistingSectionToSong(songId, sectionId)
     fun unlinkSectionFromSong(songId: String, sectionId: String) =
         controller.unlinkSectionFromSong(songId, sectionId)
+    fun unlinkSongSectionAt(songId: String, index: Int) =
+        controller.unlinkSectionFromSongAt(songId, index)
     fun moveSongSection(songId: String, from: Int, to: Int) = controller.moveSongSection(songId, from, to)
     fun setSongSectionAutoAdvance(songId: String, sectionId: String, autoAdvance: Boolean) =
         controller.setSongSectionAutoAdvance(songId, sectionId, autoAdvance)
+    fun setSongSectionAutoAdvanceAt(songId: String, index: Int, autoAdvance: Boolean) =
+        controller.setSongSectionAutoAdvanceAt(songId, index, autoAdvance)
     fun loadSong(song: Song) = controller.loadSong(song)
     fun deleteSong(song: Song): DeleteResult = controller.deleteSong(song)
 
