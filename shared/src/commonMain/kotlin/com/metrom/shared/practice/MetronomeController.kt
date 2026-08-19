@@ -174,7 +174,7 @@ class MetronomeController(
     }
 
     fun handleBeat(event: BeatEvent) {
-        if (event.beatIndex == 0 && lastBeatIndex > 0) {
+        if (event.beatIndex == 0 && lastBeatIndex != -1) {
             barIndex++
             onBarAdvanced(barIndex)
         } else if (event.beatIndex == 0 && lastBeatIndex == -1) {
